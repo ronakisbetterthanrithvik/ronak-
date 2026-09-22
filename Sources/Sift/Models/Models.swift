@@ -1,8 +1,11 @@
 import Foundation
 import SwiftUI
 
-struct Song: Identifiable, Hashable {
+struct SiftSong: Identifiable, Hashable {
     let id = UUID()
+    /// Stable across app launches: MusicKit's own `Song.id.rawValue` for library songs,
+    /// or a deterministic placeholder for demo data. Used as the listening-history key.
+    let libraryID: String
     let title: String
     let artist: String
     let album: String
@@ -10,12 +13,14 @@ struct Song: Identifiable, Hashable {
     let duration: TimeInterval
 }
 
-struct Playlist {
+struct SiftPlaylist {
+    /// MusicKit's own `Playlist.id.rawValue` once connected to a real library playlist, nil for demo data.
+    var libraryID: String?
     let name: String
     let ownerName: String
     let songCount: Int
     let totalDuration: TimeInterval
-    let sampleSongs: [Song]
+    let songs: [SiftSong]
     let genresPresent: [String]
     let topArtists: [String]
     let allArtists: [String]
@@ -63,6 +68,9 @@ struct ProposedPlaylist: Identifiable {
     let duration: TimeInterval
     let previewTracks: [String]
     let gradient: [Color]
+    /// Library IDs of the songs behind this proposal, used to actually create the
+    /// playlist in Apple Music. Empty for demo data.
+    var songLibraryIDs: [String] = []
     var isSelected: Bool = true
 }
 
@@ -72,7 +80,7 @@ struct SmartControlSettings {
     var selectedGenres: Set<String>
     var selectedArtists: Set<String>
 
-    static func `default`(for playlist: Playlist) -> SmartControlSettings {
+    static func `default`(for playlist: SiftPlaylist) -> SmartControlSettings {
         SmartControlSettings(
             familiarity: 0.28,
             signals: [

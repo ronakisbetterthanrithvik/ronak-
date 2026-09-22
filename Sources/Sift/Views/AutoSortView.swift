@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct AutoSortView: View {
-    let playlist: Playlist
+    let playlist: SiftPlaylist
     @Binding var proposalsByMode: [AutoSortMode: [ProposedPlaylist]]
-    var onCreate: (Int) -> Void
+    var onCreate: ([ProposedPlaylist]) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var mode: AutoSortMode = .genre
@@ -29,9 +29,19 @@ struct AutoSortView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(proposals.indices, id: \.self) { index in
-                            ProposedPlaylistCard(proposal: bindingForProposal(at: index))
+                    if proposals.isEmpty {
+                        Text(mode == .vibe
+                             ? "Vibe grouping needs Sift's own mood classifier, which isn't built yet — Genre and Artist are ready now."
+                             : "Nothing to propose yet.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 24)
+                    } else {
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(proposals.indices, id: \.self) { index in
+                                ProposedPlaylistCard(proposal: bindingForProposal(at: index))
+                            }
                         }
                     }
                 }
@@ -128,7 +138,7 @@ struct AutoSortView: View {
                 .foregroundStyle(.white)
 
             Button {
-                onCreate(selectedCount)
+                onCreate(proposals.filter(\.isSelected))
                 dismiss()
             } label: {
                 Text("Create Playlists")

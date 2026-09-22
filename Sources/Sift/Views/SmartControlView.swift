@@ -1,14 +1,14 @@
 import SwiftUI
 
 struct SmartControlView: View {
-    let playlist: Playlist
+    let playlist: SiftPlaylist
     @Binding var settings: SmartControlSettings
     var onApply: (SmartControlSettings) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var draft: SmartControlSettings
 
-    init(playlist: Playlist, settings: Binding<SmartControlSettings>, onApply: @escaping (SmartControlSettings) -> Void) {
+    init(playlist: SiftPlaylist, settings: Binding<SmartControlSettings>, onApply: @escaping (SmartControlSettings) -> Void) {
         self.playlist = playlist
         self._settings = settings
         self.onApply = onApply

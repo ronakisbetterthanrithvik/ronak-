@@ -1,22 +1,23 @@
 import SwiftUI
 
-extension Playlist {
-    static let everything = Playlist(
-        name: "My Everything Playlist",
+extension SiftPlaylist {
+    static let everything = SiftPlaylist(
+        libraryID: nil,
+        name: "My Everything Playlist (Demo)",
         ownerName: "Ronak",
         songCount: 482,
         totalDuration: 29 * 3600 + 40 * 60,
-        sampleSongs: [
-            Song(title: "Blinding Lights", artist: "The Weeknd", album: "After Hours", genre: "R&B", duration: 200),
-            Song(title: "Levitating", artist: "Dua Lipa", album: "Future Nostalgia", genre: "Pop", duration: 203),
-            Song(title: "Sunroof", artist: "Nicky Youre", album: "Sunroof", genre: "Electronic", duration: 187),
-            Song(title: "good 4 u", artist: "Olivia Rodrigo", album: "SOUR", genre: "Pop", duration: 178),
-            Song(title: "As It Was", artist: "Harry Styles", album: "Harry's House", genre: "Indie", duration: 167),
-            Song(title: "Take Me Home, Country Roads", artist: "John Denver", album: "Poems, Prayers & Promises", genre: "Country", duration: 189),
-            Song(title: "No Role Modelz", artist: "J. Cole", album: "2014 Forest Hills Drive", genre: "Hip-Hop", duration: 292),
-            Song(title: "Location", artist: "Khalid", album: "American Teen", genre: "R&B", duration: 233),
-            Song(title: "Cruel Summer", artist: "Taylor Swift", album: "Lover", genre: "Pop", duration: 178),
-            Song(title: "Redbone", artist: "Childish Gambino", album: "Awaken, My Love!", genre: "Rock", duration: 327)
+        songs: [
+            SiftSong(libraryID: "demo.blinding-lights", title: "Blinding Lights", artist: "The Weeknd", album: "After Hours", genre: "R&B", duration: 200),
+            SiftSong(libraryID: "demo.levitating", title: "Levitating", artist: "Dua Lipa", album: "Future Nostalgia", genre: "Pop", duration: 203),
+            SiftSong(libraryID: "demo.sunroof", title: "Sunroof", artist: "Nicky Youre", album: "Sunroof", genre: "Electronic", duration: 187),
+            SiftSong(libraryID: "demo.good-4-u", title: "good 4 u", artist: "Olivia Rodrigo", album: "SOUR", genre: "Pop", duration: 178),
+            SiftSong(libraryID: "demo.as-it-was", title: "As It Was", artist: "Harry Styles", album: "Harry's House", genre: "Indie", duration: 167),
+            SiftSong(libraryID: "demo.country-roads", title: "Take Me Home, Country Roads", artist: "John Denver", album: "Poems, Prayers & Promises", genre: "Country", duration: 189),
+            SiftSong(libraryID: "demo.no-role-modelz", title: "No Role Modelz", artist: "J. Cole", album: "2014 Forest Hills Drive", genre: "Hip-Hop", duration: 292),
+            SiftSong(libraryID: "demo.location", title: "Location", artist: "Khalid", album: "American Teen", genre: "R&B", duration: 233),
+            SiftSong(libraryID: "demo.cruel-summer", title: "Cruel Summer", artist: "Taylor Swift", album: "Lover", genre: "Pop", duration: 178),
+            SiftSong(libraryID: "demo.redbone", title: "Redbone", artist: "Childish Gambino", album: "Awaken, My Love!", genre: "Rock", duration: 327)
         ],
         genresPresent: ["Hip-Hop", "R&B", "Pop", "Country", "Indie", "Electronic", "Latin", "Rock", "Jazz"],
         topArtists: ["The Weeknd", "Dua Lipa", "Taylor Swift", "J. Cole"],

@@ -1,8 +1,25 @@
+import MusicKit
 import SwiftUI
 
+private enum Stage {
+    case connecting
+    case pickingPlaylist
+    case ready
+}
+
 struct PlaylistDetailView: View {
-    @State private var playlist = Playlist.everything
-    @State private var smartControlSettings = SmartControlSettings.default(for: Playlist.everything)
+    @StateObject private var auth = MusicAuthorizationService.shared
+    @StateObject private var playback = PlaybackService.shared
+
+    @State private var stage: Stage = .connecting
+    @State private var isDemoMode = true
+
+    @State private var libraryPlaylists: [LibraryPlaylistSummary] = []
+    @State private var isLoadingLibrary = false
+    @State private var libraryError: String?
+
+    @State private var playlist = SiftPlaylist.everything
+    @State private var smartControlSettings = SmartControlSettings.default(for: SiftPlaylist.everything)
     @State private var autoSortProposals = AutoSortStore.proposals
 
     @State private var showSmartControl = false
@@ -12,6 +29,33 @@ struct PlaylistDetailView: View {
     private var showsAdvancedTools: Bool { playlist.songCount >= 25 }
 
     var body: some View {
+        Group {
+            switch stage {
+            case .connecting:
+                ConnectView(status: authorizationDisplay, onConnect: connectToAppleMusic, onUseDemoData: useDemoData)
+            case .pickingPlaylist:
+                PlaylistPickerView(
+                    playlists: libraryPlaylists,
+                    isLoading: isLoadingLibrary,
+                    errorMessage: libraryError,
+                    onSelect: { selectPlaylist($0) },
+                    onUseDemoData: useDemoData,
+                    onRetry: { Task { await loadLibraryPlaylists() } }
+                )
+            case .ready:
+                readyContent
+            }
+        }
+        .frame(minWidth: 900, minHeight: 640)
+        .task {
+            auth.refreshStatus()
+            if auth.isAuthorized {
+                await loadLibraryPlaylists()
+            }
+        }
+    }
+
+    private var readyContent: some View {
         ZStack(alignment: .top) {
             Theme.background.ignoresSafeArea()
 
@@ -35,18 +79,80 @@ struct PlaylistDetailView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .frame(minWidth: 900, minHeight: 640)
         .sheet(isPresented: $showSmartControl) {
             SmartControlView(playlist: playlist, settings: $smartControlSettings) { _ in
                 announce("Smart Control updated")
             }
         }
         .sheet(isPresented: $showAutoSort) {
-            AutoSortView(playlist: playlist, proposalsByMode: $autoSortProposals) { createdCount in
-                announce("Created \(createdCount) playlist\(createdCount == 1 ? "" : "s")")
+            AutoSortView(playlist: playlist, proposalsByMode: $autoSortProposals) { selected in
+                Task { await createPlaylists(selected) }
             }
         }
     }
+
+    // MARK: - Apple Music connection
+
+    private var authorizationDisplay: MusicAuthorizationStatusDisplay {
+        switch auth.status {
+        case .denied: return .denied
+        case .restricted: return .restricted
+        default: return .notDetermined
+        }
+    }
+
+    private func connectToAppleMusic() {
+        Task {
+            let status = await auth.requestAccess()
+            if status == .authorized {
+                await loadLibraryPlaylists()
+            }
+        }
+    }
+
+    private func loadLibraryPlaylists() async {
+        stage = .pickingPlaylist
+        isLoadingLibrary = true
+        libraryError = nil
+        do {
+            libraryPlaylists = try await MusicLibraryService.shared.fetchPlaylists()
+        } catch {
+            libraryError = error.localizedDescription
+        }
+        isLoadingLibrary = false
+    }
+
+    private func selectPlaylist(_ summary: LibraryPlaylistSummary) {
+        Task {
+            isLoadingLibrary = true
+            libraryError = nil
+            do {
+                let loaded = try await MusicLibraryService.shared.loadPlaylist(id: summary.id)
+                playlist = loaded
+                smartControlSettings = SmartControlSettings.default(for: loaded)
+                autoSortProposals = [
+                    .genre: AutoSortEngine.genreGroups(from: loaded.songs),
+                    .artist: AutoSortEngine.artistGroups(from: loaded.songs),
+                    .vibe: []
+                ]
+                isDemoMode = false
+                stage = .ready
+            } catch {
+                libraryError = error.localizedDescription
+                isLoadingLibrary = false
+            }
+        }
+    }
+
+    private func useDemoData() {
+        playlist = .everything
+        smartControlSettings = SmartControlSettings.default(for: .everything)
+        autoSortProposals = AutoSortStore.proposals
+        isDemoMode = true
+        stage = .ready
+    }
+
+    // MARK: - Header
 
     private var header: some View {
         HStack(alignment: .top, spacing: 20) {
@@ -66,7 +172,15 @@ struct PlaylistDetailView: View {
 
             Spacer()
 
-            appBadge
+            VStack(alignment: .trailing, spacing: 8) {
+                appBadge
+                if !isDemoMode {
+                    Button("Switch Playlist") { Task { await loadLibraryPlaylists() } }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(Theme.accentSecondary)
+                }
+            }
         }
     }
 
@@ -80,10 +194,10 @@ struct PlaylistDetailView: View {
 
     private var appBadge: some View {
         HStack(spacing: 6) {
-            Image(systemName: "checkmark.seal.fill")
+            Image(systemName: isDemoMode ? "eye.fill" : "checkmark.seal.fill")
                 .font(.caption)
                 .foregroundStyle(Theme.accentSecondary)
-            Text("Works with Apple Music")
+            Text(isDemoMode ? "Demo data — not connected" : "Connected to Apple Music")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -92,9 +206,11 @@ struct PlaylistDetailView: View {
         .background(Capsule().fill(Color.white.opacity(0.06)))
     }
 
+    // MARK: - Actions
+
     private var actionRow: some View {
         HStack(spacing: 12) {
-            Button {} label: {
+            Button { Task { await playTapped() } } label: {
                 Label("Play", systemImage: "play.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .padding(.horizontal, 22)
@@ -104,7 +220,7 @@ struct PlaylistDetailView: View {
             }
             .buttonStyle(.plain)
 
-            Button {} label: {
+            Button { Task { await shuffleTapped() } } label: {
                 Label("Shuffle", systemImage: "shuffle")
                     .font(.system(size: 14, weight: .semibold))
                     .padding(.horizontal, 20)
@@ -120,6 +236,41 @@ struct PlaylistDetailView: View {
             }
 
             Spacer()
+        }
+    }
+
+    private func playTapped() async {
+        guard !isDemoMode else {
+            announce("Connect Apple Music to actually play songs")
+            return
+        }
+        await playback.playInOrder(playlist.songs)
+    }
+
+    private func shuffleTapped() async {
+        guard !isDemoMode else {
+            announce("Connect Apple Music to actually play songs")
+            return
+        }
+        await playback.shufflePlay(playlist.songs, settings: smartControlSettings)
+    }
+
+    private func createPlaylists(_ proposals: [ProposedPlaylist]) async {
+        guard !isDemoMode else {
+            announce("Created \(proposals.count) playlist\(proposals.count == 1 ? "" : "s") (demo — not saved)")
+            return
+        }
+        var created = 0
+        for proposal in proposals {
+            do {
+                try await MusicLibraryService.shared.createPlaylist(name: proposal.name, songLibraryIDs: proposal.songLibraryIDs)
+                created += 1
+            } catch {
+                announce("Couldn't create \"\(proposal.name)\": \(error.localizedDescription)")
+            }
+        }
+        if created > 0 {
+            announce("Created \(created) playlist\(created == 1 ? "" : "s") in Apple Music")
         }
     }
 
@@ -143,9 +294,11 @@ struct PlaylistDetailView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Track list
+
     private var trackList: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(playlist.sampleSongs.enumerated()), id: \.element.id) { index, song in
+        LazyVStack(spacing: 0) {
+            ForEach(Array(playlist.songs.enumerated()), id: \.element.id) { index, song in
                 HStack {
                     Text("\(index + 1)")
                         .font(.system(size: 13))
@@ -174,14 +327,6 @@ struct PlaylistDetailView: View {
                 .padding(.horizontal, 10)
                 .background(index.isMultiple(of: 2) ? Color.white.opacity(0.02) : Color.clear)
             }
-
-            HStack(spacing: 6) {
-                Image(systemName: "ellipsis.circle")
-                Text("Showing \(playlist.sampleSongs.count) of \(playlist.songCount) songs")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.top, 10)
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.03)))
