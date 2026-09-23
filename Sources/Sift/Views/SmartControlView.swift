@@ -23,6 +23,14 @@ struct SmartControlView: View {
         draft.selectedArtists.filter { !pinnedArtists.contains($0) }.sorted()
     }
 
+    private var hasAnyListeningHistory: Bool {
+        let history = ListeningHistoryStore.shared
+        return playlist.songs.contains { song in
+            let entry = history.entry(for: song.libraryID)
+            return entry.plays > 0 || entry.skips > 0 || entry.lastPlayedAt != nil
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -98,7 +106,7 @@ struct SmartControlView: View {
             }
             .font(.system(size: 12, weight: .semibold))
 
-            Text(draft.familiarityCaption)
+            Text(draft.familiarityCaption(hasHistory: hasAnyListeningHistory))
                 .font(.system(size: 13))
                 .foregroundStyle(.white.opacity(0.9))
                 .padding(12)

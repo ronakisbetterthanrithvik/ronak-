@@ -95,7 +95,14 @@ struct SmartControlSettings {
         )
     }
 
-    var familiarityCaption: String {
+    /// `hasHistory` should be true only once Sift has recorded a real play or skip for at
+    /// least one song here — otherwise every song scores identically (see
+    /// `SmartControlEngine`) and this dial has no actual effect on Shuffle yet, so the
+    /// caption says that plainly instead of claiming a bias that isn't there.
+    func familiarityCaption(hasHistory: Bool) -> String {
+        guard hasHistory else {
+            return "Still learning — Sift hasn't seen enough plays or skips here yet, so Shuffle is just random for now. This starts reflecting real habits once you've used Play/Shuffle in Sift a bit."
+        }
         switch familiarity {
         case ..<0.35:
             return "Currently favoring the deep cuts you almost never hit play on."

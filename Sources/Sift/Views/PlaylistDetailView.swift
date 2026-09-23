@@ -26,6 +26,9 @@ struct PlaylistDetailView: View {
     @State private var showAutoSort = false
     @State private var confirmationMessage: String?
 
+    @AppStorage("hasSeenWelcomeDisclaimer") private var hasSeenWelcomeDisclaimer = false
+    @State private var showWelcomeDisclaimer = false
+
     private var showsAdvancedTools: Bool { playlist.songCount >= 25 }
 
     var body: some View {
@@ -47,7 +50,16 @@ struct PlaylistDetailView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 640)
+        .sheet(isPresented: $showWelcomeDisclaimer) {
+            WelcomeDisclaimerView {
+                hasSeenWelcomeDisclaimer = true
+                showWelcomeDisclaimer = false
+            }
+        }
         .task {
+            if !hasSeenWelcomeDisclaimer {
+                showWelcomeDisclaimer = true
+            }
             auth.refreshStatus()
             if auth.isAuthorized {
                 await loadLibraryPlaylists()
