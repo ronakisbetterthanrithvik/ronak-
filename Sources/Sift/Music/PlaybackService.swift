@@ -49,6 +49,11 @@ final class PlaybackService: ObservableObject {
 
     private var trackStartedAt: Date?
 
+    /// Elapsed time into whatever's currently loaded, straight from the player. MusicKit
+    /// doesn't publish this as a Combine value, so the now-playing progress bar polls it
+    /// directly (via a `TimelineView`) instead of Sift maintaining its own timer.
+    var currentPlaybackTime: TimeInterval { player.playbackTime }
+
     func playInOrder(_ songs: [SiftSong]) async throws {
         try await start(with: songs)
     }

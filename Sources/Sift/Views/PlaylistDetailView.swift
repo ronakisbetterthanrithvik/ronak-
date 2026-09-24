@@ -78,10 +78,12 @@ struct PlaylistDetailView: View {
                     backButton
                     header
                     actionRow
-                    nowPlayingBar
                     trackList
                 }
                 .padding(28)
+            }
+            .safeAreaInset(edge: .bottom) {
+                nowPlayingBar
             }
 
             if let message = confirmationMessage {
@@ -378,75 +380,106 @@ struct PlaylistDetailView: View {
         return playlist.songs.first { $0.libraryID == id }
     }
 
-    /// A persistent mini transport bar for whatever's currently loaded -- shuffle/back/
-    /// play/forward on the left, the now-playing song in the middle (tap it to open the
-    /// Queue), and a dedicated Queue button on the right. Mirrors the layout of Apple
-    /// Music's own mini player bar.
+    /// A persistent mini transport bar docked to the bottom of the window, the same spot
+    /// Apple Music's own player bar sits -- shuffle/back/play/forward on the left, the
+    /// now-playing song in the middle (tap it to open the Queue), a Queue button on the
+    /// right, and a thin progress line along the very bottom edge. It's attached via
+    /// `.safeAreaInset` rather than living inside the scrolling content, so it stays put
+    /// while the track list scrolls underneath it.
     @ViewBuilder
     private var nowPlayingBar: some View {
         if let song = nowPlayingSong {
-            HStack(spacing: 14) {
-                HStack(spacing: 16) {
-                    Button { Task { await shuffleTapped() } } label: {
-                        Image(systemName: "shuffle")
-                    }
-                    Button { Task { await playback.skipToPrevious() } } label: {
-                        Image(systemName: "backward.fill")
-                    }
-                    Button {
-                        if playback.isPlaying {
-                            playback.pause()
-                        } else {
-                            Task { try? await playback.resume() }
+            VStack(spacing: 0) {
+                Divider().overlay(Color.white.opacity(0.08))
+
+                HStack(spacing: 20) {
+                    HStack(spacing: 18) {
+                        Button { Task { await shuffleTapped() } } label: {
+                            Image(systemName: "shuffle")
                         }
-                    } label: {
-                        Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .bold))
+                        Button { Task { await playback.skipToPrevious() } } label: {
+                            Image(systemName: "backward.fill")
+                        }
+                        Button {
+                            if playback.isPlaying {
+                                playback.pause()
+                            } else {
+                                Task { try? await playback.resume() }
+                            }
+                        } label: {
+                            Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                        Button { Task { await playback.skipToNext() } } label: {
+                            Image(systemName: "forward.fill")
+                        }
                     }
-                    Button { Task { await playback.skipToNext() } } label: {
-                        Image(systemName: "forward.fill")
+                    .font(.system(size: 13, weight: .semibold))
+
+                    Button { showQueue = true } label: {
+                        HStack(spacing: 10) {
+                            rowArtwork(for: song)
+                                .frame(width: 32, height: 32)
+                                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(song.title)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .lineLimit(1)
+                                Text(song.artist)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            if playback.isPlaying {
+                                EqualizerBars(isPlaying: true)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+
+                    Spacer()
+
+                    Button { showQueue = true } label: {
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .font(.system(size: 13, weight: .semibold))
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
 
-                Divider().frame(height: 22).overlay(Color.white.opacity(0.15))
+                playbackProgressLine(for: song)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 10)
+            }
+            .background(.ultraThinMaterial)
+            .background(Color.black.opacity(0.45))
+        }
+    }
 
-                Button { showQueue = true } label: {
-                    HStack(spacing: 10) {
-                        rowArtwork(for: song)
-                            .frame(width: 30, height: 30)
-                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(song.title)
-                                .font(.system(size: 13, weight: .semibold))
-                                .lineLimit(1)
-                            Text(song.artist)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                        if playback.isPlaying {
-                            EqualizerBars(isPlaying: true)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-
-                Spacer()
-
-                Button { showQueue = true } label: {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.secondary)
+    /// Polls `playback.currentPlaybackTime` on a half-second tick -- MusicKit doesn't
+    /// publish elapsed time as a Combine value, so this is the simplest way to keep the
+    /// line moving without Sift maintaining its own timer/state for it.
+    private func playbackProgressLine(for song: SiftSong) -> some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.15))
+                    Capsule()
+                        .fill(Color.white.opacity(0.85))
+                        .frame(width: geo.size.width * progressFraction(for: song))
                 }
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.accentPrimary.opacity(0.16)))
-            .glassSurface(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+        .frame(height: 3)
+    }
+
+    private func progressFraction(for song: SiftSong) -> Double {
+        guard song.duration > 0 else { return 0 }
+        return min(max(playback.currentPlaybackTime / song.duration, 0), 1)
     }
 
     private func toolButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
