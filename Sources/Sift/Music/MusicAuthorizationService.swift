@@ -1,5 +1,6 @@
 import MusicKit
 import SwiftUI
+import Combine
 
 @MainActor
 final class MusicAuthorizationService: ObservableObject {
