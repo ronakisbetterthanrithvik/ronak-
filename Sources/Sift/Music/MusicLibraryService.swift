@@ -75,6 +75,8 @@ final class MusicLibraryService {
             }
         }
 
+        print("Sift DEBUG: playlist artwork = \(detailed.artwork != nil), mosaic URLs collected = \(mosaicURLs.count)")
+
         let genres = Array(Set(songs.map(\.genre))).sorted()
         let artistCounts = Dictionary(grouping: songs, by: \.artist).mapValues(\.count)
         let topArtists = artistCounts.sorted { $0.value > $1.value }.prefix(4).map(\.key)

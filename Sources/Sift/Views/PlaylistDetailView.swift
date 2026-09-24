@@ -221,7 +221,7 @@ struct PlaylistDetailView: View {
                         artworkPlaceholder
                     }
                 }
-            } else if playlist.mosaicArtworkURLs.count >= 4 {
+            } else if !playlist.mosaicArtworkURLs.isEmpty {
                 artworkMosaic
             } else {
                 artworkPlaceholder
@@ -233,9 +233,11 @@ struct PlaylistDetailView: View {
     }
 
     /// Matches how Apple Music itself covers a personal playlist with no custom artwork:
-    /// a 2x2 grid of album art from the playlist's own songs.
+    /// a 2x2 grid of album art from the playlist's own songs. Pads with the placeholder
+    /// tile if fewer than 4 song artworks were actually available.
     private var artworkMosaic: some View {
-        let urls = Array(playlist.mosaicArtworkURLs.prefix(4))
+        let available = playlist.mosaicArtworkURLs
+        let urls: [URL?] = (0..<4).map { index in index < available.count ? available[index] : nil }
         return Grid(horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
                 mosaicTile(urls[0])
@@ -248,16 +250,22 @@ struct PlaylistDetailView: View {
         }
     }
 
-    private func mosaicTile(_ url: URL) -> some View {
-        AsyncImage(url: url) { phase in
-            if let image = phase.image {
-                image.resizable().aspectRatio(contentMode: .fill)
-            } else {
-                Theme.accentPrimary.opacity(0.2)
+    @ViewBuilder
+    private func mosaicTile(_ url: URL?) -> some View {
+        if let url {
+            AsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Theme.accentPrimary.opacity(0.2)
+                }
             }
+            .frame(width: 60, height: 60)
+            .clipped()
+        } else {
+            Theme.accentGradient
+                .frame(width: 60, height: 60)
         }
-        .frame(width: 60, height: 60)
-        .clipped()
     }
 
     private var artworkPlaceholder: some View {
