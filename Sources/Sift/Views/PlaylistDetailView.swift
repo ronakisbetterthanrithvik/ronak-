@@ -222,7 +222,7 @@ struct PlaylistDetailView: View {
             if let artwork = playlist.artwork {
                 // A playlist's own custom cover can be any photo someone picked, unlike
                 // a song's own artwork -- give it room to not be a perfect square.
-                squareArtwork(artwork, size: 120, overscan: 2)
+                squareArtwork(artwork, size: 120, overscan: 1.5)
             } else if !playlist.mosaicArtwork.isEmpty {
                 artworkMosaic
             } else {

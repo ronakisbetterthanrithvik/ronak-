@@ -17,8 +17,14 @@ import MusicKit
 ///   and, multiplied across every row of a 1,000+ song track list while scrolling, was
 ///   enough extra network load to cause real timeouts and rows stuck on a broken tile.
 /// - A personal playlist's own custom cover, though, can be any photo a person picked,
-///   so those call sites should still pass a taller `overscan` (2.0 comfortably covers
-///   any photo up to a 2:1 aspect ratio) to guarantee full coverage.
+///   so those call sites still pass a taller `overscan`. A full 2x was too aggressive
+///   here too, in the other direction: for a cover that turns out to already be square
+///   (very common -- a system playlist's icon, or a square-cropped photo), fitting it
+///   into a box twice the target size means the crop keeps only the center *half* of
+///   the image on each axis, a jarring zoomed-in look. 1.5x is a middle ground: still
+///   enough margin to fully cover any photo up to a 3:2 aspect ratio (comfortably past
+///   a typical phone photo or screenshot) while cropping a square source much more
+///   gently (about a sixth off each edge instead of a third).
 func squareArtwork(_ artwork: Artwork, size: CGFloat, overscan: CGFloat = 1.0) -> some View {
     ArtworkImage(artwork, width: size * overscan, height: size * overscan)
         .frame(width: size, height: size)
