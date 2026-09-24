@@ -272,17 +272,13 @@ struct PlaylistDetailView: View {
             announce("Created \(proposals.count) playlist\(proposals.count == 1 ? "" : "s") (demo — not saved)")
             return
         }
-        var created = 0
-        for proposal in proposals {
-            do {
+        do {
+            for proposal in proposals {
                 try await MusicLibraryService.shared.createPlaylist(name: proposal.name, songLibraryIDs: proposal.songLibraryIDs)
-                created += 1
-            } catch {
-                announce("Couldn't create \"\(proposal.name)\": \(error.localizedDescription)")
             }
-        }
-        if created > 0 {
-            announce("Created \(created) playlist\(created == 1 ? "" : "s") in Apple Music")
+            announce("Created \(proposals.count) playlist\(proposals.count == 1 ? "" : "s") in Apple Music")
+        } catch {
+            announce(error.localizedDescription)
         }
     }
 

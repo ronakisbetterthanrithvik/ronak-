@@ -9,6 +9,7 @@ struct LibraryPlaylistSummary: Identifiable, Hashable {
 enum MusicLibraryError: LocalizedError {
     case playlistNotFound
     case noSongsToCreatePlaylistFrom
+    case playlistCreationUnsupportedOnMac
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +17,8 @@ enum MusicLibraryError: LocalizedError {
             return "That playlist couldn't be found in your library anymore."
         case .noSongsToCreatePlaylistFrom:
             return "None of those songs were found in your library."
+        case .playlistCreationUnsupportedOnMac:
+            return "Apple's on-device MusicKit doesn't support creating playlists on Mac yet (iOS/iPadOS only) — this is a real Apple platform limitation, not a Sift bug."
         }
     }
 }
@@ -87,16 +90,20 @@ final class MusicLibraryService {
         )
     }
 
-    /// Creates a real playlist in the connected Apple Music library.
+    /// Would create a real playlist in the connected Apple Music library.
     ///
-    /// - Note: `MusicLibrary`'s playlist-creation surface has shifted across recent
-    ///   SDKs. If `createPlaylist` doesn't match this signature in your Xcode version,
-    ///   autocomplete on `MusicLibrary.shared.` will show the current overload — the
-    ///   intent (a new library playlist containing these songs) stays the same.
+    /// - Important: `MusicLibrary.createPlaylist(name:description:authorDisplayName:items:)`
+    ///   is explicitly marked unavailable on macOS in MusicKit's current SDK — confirmed
+    ///   directly from Xcode's own compiler error, not assumed. Apple's on-device
+    ///   playlist-creation API is iOS/iPadOS only right now. The PRD's own Technical
+    ///   Architecture section anticipated this gap and named AppleScript automation as
+    ///   the Mac-specific workaround (driving Music.app directly) — that's a real,
+    ///   separate piece of work this doesn't attempt yet, so this throws a clear error
+    ///   instead of silently failing or refusing to compile.
     func createPlaylist(name: String, songLibraryIDs: [String]) async throws {
         let songs = songLibraryIDs.compactMap { songCache[$0] }
         guard !songs.isEmpty else { throw MusicLibraryError.noSongsToCreatePlaylistFrom }
-        _ = try await MusicLibrary.shared.createPlaylist(name: name, items: songs)
+        throw MusicLibraryError.playlistCreationUnsupportedOnMac
     }
 
     /// The real MusicKit `Song` behind a library ID, if it's been seen since launch
