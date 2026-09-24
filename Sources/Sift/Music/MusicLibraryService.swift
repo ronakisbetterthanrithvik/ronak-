@@ -4,7 +4,6 @@ import Foundation
 struct LibraryPlaylistSummary: Identifiable, Hashable {
     let id: String
     let name: String
-    let artworkURL: URL?
 }
 
 /// A playlist's real cover -- its own custom artwork if it has one, or (for a personal
@@ -47,22 +46,24 @@ final class MusicLibraryService {
         var request = MusicLibraryRequest<Playlist>()
         request.limit = 100
         let response = try await request.response()
-        return response.items.map {
-            LibraryPlaylistSummary(id: $0.id.rawValue, name: $0.name, artworkURL: $0.artwork?.url(width: 300, height: 300))
-        }
+        return response.items.map { LibraryPlaylistSummary(id: $0.id.rawValue, name: $0.name) }
     }
 
-    /// The lightweight `fetchPlaylists()` list only gets a playlist's `artwork` when it
-    /// already has custom art (most user playlists don't). For the rest, this loads that
-    /// one playlist's tracks -- the same call `loadPlaylist` makes when actually opening
-    /// it -- just to sample a handful of song artworks for a mosaic. Used lazily, only
-    /// for playlists the picker's carousel actually scrolls to, and cached by the caller.
+    /// A playlist's `artwork` on the bare items `fetchPlaylists()` returns is unreliable
+    /// (often nil even when the playlist visibly has custom art in Music.app) -- that
+    /// property only actually resolves once loaded via `.with(.tracks)`, exactly like
+    /// `loadPlaylist` below already does when opening a playlist for real. So this always
+    /// goes through that same detailed fetch rather than trusting the shallow list
+    /// response, and falls back to sampling a handful of the playlist's own songs for a
+    /// mosaic if it truly has no custom art. Used lazily, only for playlists the picker's
+    /// carousel actually scrolls to, and cached by the caller.
     func loadPlaylistCoverArtwork(id: String) async -> PlaylistCoverArtwork {
         do {
             var request = MusicLibraryRequest<Playlist>()
             request.filter(matching: \.id, equalTo: MusicItemID(id))
             let response = try await request.response()
             guard let basePlaylist = response.items.first else {
+                print("Sift DEBUG: loadPlaylistCoverArtwork — no playlist found for id \(id)")
                 return PlaylistCoverArtwork(singleURL: nil, mosaicURLs: [])
             }
 
@@ -77,8 +78,12 @@ final class MusicLibraryService {
                 mosaicURLs.append(url)
                 if mosaicURLs.count == 4 { break }
             }
+            if mosaicURLs.isEmpty {
+                print("Sift DEBUG: loadPlaylistCoverArtwork — \(detailed.name) has no artwork and no track artwork to build a mosaic from")
+            }
             return PlaylistCoverArtwork(singleURL: nil, mosaicURLs: mosaicURLs)
         } catch {
+            print("Sift DEBUG: loadPlaylistCoverArtwork failed for id \(id) — \(error)")
             return PlaylistCoverArtwork(singleURL: nil, mosaicURLs: [])
         }
     }

@@ -18,10 +18,8 @@ struct PlaylistPickerView: View {
         case unavailable
     }
 
-    /// Most personal playlists don't have custom artwork, so `playlists[i].artworkURL`
-    /// (from the cheap list fetch) is usually nil -- this fills in with a real mosaic of
-    /// the playlist's own tracks instead, fetched lazily per playlist as the carousel
-    /// scrolls to it, and cached here so it's never fetched twice.
+    /// Each playlist's real cover, fetched lazily (via `MusicLibraryService.loadPlaylistCoverArtwork`)
+    /// only for playlists the carousel actually scrolls to, and cached here so none is ever fetched twice.
     @State private var covers: [String: Cover] = [:]
 
     /// How many tiles show on either side of the selected one before they're clipped off.
@@ -169,20 +167,16 @@ struct PlaylistPickerView: View {
 
     @ViewBuilder
     private func artwork(for playlist: LibraryPlaylistSummary) -> some View {
-        if let url = playlist.artworkURL {
+        switch covers[playlist.id] {
+        case .single(let url):
             remoteImage(url)
-        } else {
-            switch covers[playlist.id] {
-            case .single(let url):
-                remoteImage(url)
-            case .mosaic(let urls):
-                mosaic(urls)
-            case .unavailable:
-                artworkPlaceholder
-            case nil:
-                artworkPlaceholder
-                    .task { await loadCover(for: playlist) }
-            }
+        case .mosaic(let urls):
+            mosaic(urls)
+        case .unavailable:
+            artworkPlaceholder
+        case nil:
+            artworkPlaceholder
+                .task { await loadCover(for: playlist) }
         }
     }
 
