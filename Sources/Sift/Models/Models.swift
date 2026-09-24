@@ -24,8 +24,11 @@ struct SiftPlaylist {
     let genresPresent: [String]
     let topArtists: [String]
     let allArtists: [String]
-    /// The playlist's real cover art, sized on request. Nil for demo data or playlists without artwork.
+    /// The playlist's real cover art, sized on request. Nil for demo data, or for personal
+    /// playlists without a custom cover set (which is most of them) -- for those, use the
+    /// first few `mosaicArtworkURLs` instead, matching how Apple Music itself covers them.
     var artworkURL: URL? = nil
+    var mosaicArtworkURLs: [URL] = []
 }
 
 enum Weight: String, CaseIterable, Identifiable, Hashable {

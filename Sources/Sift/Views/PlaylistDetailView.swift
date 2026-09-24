@@ -221,6 +221,8 @@ struct PlaylistDetailView: View {
                         artworkPlaceholder
                     }
                 }
+            } else if playlist.mosaicArtworkURLs.count >= 4 {
+                artworkMosaic
             } else {
                 artworkPlaceholder
             }
@@ -228,6 +230,34 @@ struct PlaylistDetailView: View {
         .frame(width: 120, height: 120)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: Theme.accentPrimary.opacity(0.4), radius: 20, y: 10)
+    }
+
+    /// Matches how Apple Music itself covers a personal playlist with no custom artwork:
+    /// a 2x2 grid of album art from the playlist's own songs.
+    private var artworkMosaic: some View {
+        let urls = Array(playlist.mosaicArtworkURLs.prefix(4))
+        return Grid(horizontalSpacing: 0, verticalSpacing: 0) {
+            GridRow {
+                mosaicTile(urls[0])
+                mosaicTile(urls[1])
+            }
+            GridRow {
+                mosaicTile(urls[2])
+                mosaicTile(urls[3])
+            }
+        }
+    }
+
+    private func mosaicTile(_ url: URL) -> some View {
+        AsyncImage(url: url) { phase in
+            if let image = phase.image {
+                image.resizable().aspectRatio(contentMode: .fill)
+            } else {
+                Theme.accentPrimary.opacity(0.2)
+            }
+        }
+        .frame(width: 60, height: 60)
+        .clipped()
     }
 
     private var artworkPlaceholder: some View {

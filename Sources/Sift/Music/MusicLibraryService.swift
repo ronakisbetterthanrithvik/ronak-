@@ -55,6 +55,7 @@ final class MusicLibraryService {
 
         var songs: [SiftSong] = []
         songs.reserveCapacity(tracks.count)
+        var mosaicURLs: [URL] = []
 
         for track in tracks {
             guard case let .song(song) = track else { continue }
@@ -69,6 +70,9 @@ final class MusicLibraryService {
                     duration: song.duration ?? 0
                 )
             )
+            if mosaicURLs.count < 4, let url = song.artwork?.url(width: 300, height: 300) {
+                mosaicURLs.append(url)
+            }
         }
 
         let genres = Array(Set(songs.map(\.genre))).sorted()
@@ -87,7 +91,8 @@ final class MusicLibraryService {
             genresPresent: genres,
             topArtists: Array(topArtists),
             allArtists: allArtists,
-            artworkURL: detailed.artwork?.url(width: 300, height: 300)
+            artworkURL: detailed.artwork?.url(width: 300, height: 300),
+            mosaicArtworkURLs: mosaicURLs
         )
     }
 
