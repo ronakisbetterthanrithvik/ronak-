@@ -80,8 +80,19 @@ struct PlaylistDetailView: View {
                     trackList
                 }
                 .padding(28)
+                .padding(.bottom, nowPlayingSong == nil ? 0 : 70)
             }
-            .safeAreaInset(edge: .bottom) {
+
+            // A plain bottom overlay instead of `.safeAreaInset(edge: .bottom)` -- that
+            // modifier on a macOS ScrollView has a known quirk where it can swallow
+            // trackpad scroll events instead of forwarding them to the scroll view, which
+            // broke scrolling on this screen entirely. This gets the same "docked at the
+            // bottom, doesn't scroll away" result (with the extra bottom padding above so
+            // the last few rows aren't hidden behind it) without touching the ScrollView's
+            // own event handling -- the empty space around the compact pill has no content
+            // of its own, so trackpad scrolling still passes through to the list beneath it.
+            VStack {
+                Spacer()
                 nowPlayingBar
             }
 
