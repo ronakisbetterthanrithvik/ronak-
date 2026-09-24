@@ -50,11 +50,21 @@ final class PlaybackService: ObservableObject {
         try await start(with: ordered)
     }
 
+    /// Plays a specific tapped song, then continues through the rest of `songs` in order
+    /// starting from that point — same as tapping a track in a normal music app.
+    func play(_ song: SiftSong, from songs: [SiftSong]) async throws {
+        guard let startIndex = songs.firstIndex(where: { $0.libraryID == song.libraryID }) else {
+            try await start(with: songs)
+            return
+        }
+        try await start(with: Array(songs[startIndex...]))
+    }
+
     func skipToNext() async {
         finishTrackingCurrentTrack()
         do {
             try await player.skipToNextEntry()
-            beginTrackingCurrentEntry()
+            beginTrackingCurrentEntry(knownLibraryID: resolveCurrentLibraryID())
         } catch {
             print("Sift: skip failed — \(error)")
         }
@@ -81,7 +91,9 @@ final class PlaybackService: ObservableObject {
         player.queue = ApplicationMusicPlayer.Queue(for: musicKitSongs)
         try await player.play()
         isPlaying = true
-        beginTrackingCurrentEntry()
+        // `player.queue.currentEntry` isn't reliably populated the instant play() returns,
+        // so use the song we know we just told it to start with instead of querying it back.
+        beginTrackingCurrentEntry(knownLibraryID: musicKitSongs[0].id.rawValue)
     }
 
     private func resolveCurrentLibraryID() -> String? {
@@ -92,9 +104,8 @@ final class PlaybackService: ObservableObject {
         return nil
     }
 
-    private func beginTrackingCurrentEntry() {
-        let libraryID = resolveCurrentLibraryID()
-        nowPlayingLibraryID = libraryID
+    private func beginTrackingCurrentEntry(knownLibraryID: String?) {
+        nowPlayingLibraryID = knownLibraryID
         trackStartedAt = Date()
     }
 

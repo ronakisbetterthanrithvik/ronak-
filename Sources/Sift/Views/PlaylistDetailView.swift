@@ -416,50 +416,71 @@ struct PlaylistDetailView: View {
             ForEach(Array(playlist.songs.enumerated()), id: \.element.id) { index, song in
                 let isNowPlaying = song.libraryID == playback.nowPlayingLibraryID
 
-                HStack(spacing: 12) {
-                    Group {
-                        if isNowPlaying {
-                            Image(systemName: playback.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.accentSecondary)
-                        } else {
-                            Text("\(index + 1)")
-                                .font(.system(size: 13))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .frame(width: 24, alignment: .leading)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(song.title)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(isNowPlaying ? Theme.accentSecondary : .primary)
-                        Text(song.artist).font(.caption).foregroundStyle(.secondary)
-                    }
-                    .frame(width: 280, alignment: .leading)
-
-                    Text(song.album)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Text(song.duration.asClockString)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 50, alignment: .trailing)
+                Button {
+                    Task { await songTapped(song) }
+                } label: {
+                    trackRow(song: song, index: index, isNowPlaying: isNowPlaying)
                 }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 10)
-                .background(
-                    isNowPlaying
-                        ? Theme.accentPrimary.opacity(0.1)
-                        : (index.isMultiple(of: 2) ? Color.white.opacity(0.02) : Color.clear)
-                )
+                .buttonStyle(.plain)
             }
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.03)))
+    }
+
+    private func trackRow(song: SiftSong, index: Int, isNowPlaying: Bool) -> some View {
+        HStack(spacing: 12) {
+            Group {
+                if isNowPlaying {
+                    Image(systemName: playback.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.accentSecondary)
+                } else {
+                    Text("\(index + 1)")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 24, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(isNowPlaying ? Theme.accentSecondary : .primary)
+                Text(song.artist).font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(width: 280, alignment: .leading)
+
+            Text(song.album)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(song.duration.asClockString)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 50, alignment: .trailing)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .background(
+            isNowPlaying
+                ? Theme.accentPrimary.opacity(0.1)
+                : (index.isMultiple(of: 2) ? Color.white.opacity(0.02) : Color.clear)
+        )
+    }
+
+    private func songTapped(_ song: SiftSong) async {
+        guard !isDemoMode else {
+            announce("Connect Apple Music to actually play songs")
+            return
+        }
+        do {
+            try await playback.play(song, from: playlist.songs)
+        } catch {
+            announce(error.localizedDescription)
+        }
     }
 
     private func announce(_ message: String) {
