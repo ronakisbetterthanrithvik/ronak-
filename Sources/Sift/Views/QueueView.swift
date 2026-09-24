@@ -163,9 +163,7 @@ struct QueueView: View {
     @ViewBuilder
     private func artwork(for song: SiftSong, size: CGFloat) -> some View {
         if let artwork = song.artwork {
-            ArtworkImage(artwork, width: 160, height: 160)
-                .scaledToFill()
-                .frame(width: size, height: size)
+            squareArtwork(artwork, size: size)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         } else {
             artworkPlaceholder

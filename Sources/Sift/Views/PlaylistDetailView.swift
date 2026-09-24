@@ -220,8 +220,7 @@ struct PlaylistDetailView: View {
     private var artwork: some View {
         Group {
             if let artwork = playlist.artwork {
-                ArtworkImage(artwork, width: 240, height: 240)
-                    .scaledToFill()
+                squareArtwork(artwork, size: 120)
             } else if !playlist.mosaicArtwork.isEmpty {
                 artworkMosaic
             } else {
@@ -254,10 +253,7 @@ struct PlaylistDetailView: View {
     @ViewBuilder
     private func mosaicTile(_ artwork: Artwork?) -> some View {
         if let artwork {
-            ArtworkImage(artwork, width: 120, height: 120)
-                .scaledToFill()
-                .frame(width: 60, height: 60)
-                .clipped()
+            squareArtwork(artwork, size: 60)
         } else {
             Theme.accentGradient
                 .frame(width: 60, height: 60)
@@ -406,8 +402,7 @@ struct PlaylistDetailView: View {
 
                     Button { showQueue = true } label: {
                         HStack(spacing: 10) {
-                            rowArtwork(for: song)
-                                .frame(width: 32, height: 32)
+                            rowArtwork(for: song, size: 32)
                                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(song.title)
@@ -526,8 +521,7 @@ struct PlaylistDetailView: View {
 
     private func trackRow(song: SiftSong, index: Int, isNowPlaying: Bool) -> some View {
         HStack(spacing: 12) {
-            rowArtwork(for: song)
-                .frame(width: 40, height: 40)
+            rowArtwork(for: song, size: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -583,12 +577,11 @@ struct PlaylistDetailView: View {
     }
 
     @ViewBuilder
-    private func rowArtwork(for song: SiftSong) -> some View {
+    private func rowArtwork(for song: SiftSong, size: CGFloat) -> some View {
         if let artwork = song.artwork {
-            ArtworkImage(artwork, width: 160, height: 160)
-                .scaledToFill()
+            squareArtwork(artwork, size: size)
         } else {
-            rowArtworkPlaceholder
+            rowArtworkPlaceholder.frame(width: size, height: size)
         }
     }
 

@@ -124,8 +124,7 @@ struct PlaylistPickerView: View {
         let xOffset = CGFloat(offset) * tileSpacing + dragTranslation
 
         return VStack(spacing: 10) {
-            artwork(for: playlist)
-                .frame(width: size, height: size)
+            artwork(for: playlist, size: size)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .shadow(color: .black.opacity(isSelected ? 0.45 : 0), radius: 22, y: 14)
 
@@ -167,17 +166,17 @@ struct PlaylistPickerView: View {
     }
 
     @ViewBuilder
-    private func artwork(for playlist: LibraryPlaylistSummary) -> some View {
+    private func artwork(for playlist: LibraryPlaylistSummary, size: CGFloat) -> some View {
         switch covers[playlist.id] {
         case .single(let artwork):
-            ArtworkImage(artwork, width: 440, height: 440)
-                .scaledToFill()
+            squareArtwork(artwork, size: size)
         case .mosaic(let artworks):
-            mosaic(artworks)
+            mosaic(artworks, size: size)
         case .unavailable:
-            artworkPlaceholder
+            artworkPlaceholder.frame(width: size, height: size)
         case nil:
             artworkPlaceholder
+                .frame(width: size, height: size)
                 .task { await loadCover(for: playlist) }
         }
     }
@@ -196,32 +195,30 @@ struct PlaylistPickerView: View {
 
     /// Matches how Apple Music itself covers a personal playlist with no custom artwork:
     /// a 2x2 grid of album art sampled from the playlist's own songs.
-    private func mosaic(_ artworks: [Artwork]) -> some View {
+    private func mosaic(_ artworks: [Artwork], size: CGFloat) -> some View {
         let tiles: [Artwork?] = (0..<4).map { $0 < artworks.count ? artworks[$0] : nil }
+        let tileSize = size / 2
         return Grid(horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
-                mosaicTile(tiles[0])
-                mosaicTile(tiles[1])
+                mosaicTile(tiles[0], size: tileSize)
+                mosaicTile(tiles[1], size: tileSize)
             }
             GridRow {
-                mosaicTile(tiles[2])
-                mosaicTile(tiles[3])
+                mosaicTile(tiles[2], size: tileSize)
+                mosaicTile(tiles[3], size: tileSize)
             }
         }
+        .frame(width: size, height: size)
     }
 
     @ViewBuilder
-    private func mosaicTile(_ artwork: Artwork?) -> some View {
-        Group {
-            if let artwork {
-                ArtworkImage(artwork, width: 220, height: 220)
-                    .scaledToFill()
-            } else {
-                Theme.accentGradient
-            }
+    private func mosaicTile(_ artwork: Artwork?, size: CGFloat) -> some View {
+        if let artwork {
+            squareArtwork(artwork, size: size)
+        } else {
+            Theme.accentGradient
+                .frame(width: size, height: size)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
     }
 
     private var artworkPlaceholder: some View {
