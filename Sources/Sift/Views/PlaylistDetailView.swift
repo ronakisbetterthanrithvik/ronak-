@@ -24,6 +24,7 @@ struct PlaylistDetailView: View {
 
     @State private var showSmartControl = false
     @State private var showAutoSort = false
+    @State private var showQueue = false
     @State private var confirmationMessage: String?
 
     @AppStorage("hasSeenWelcomeDisclaimer") private var hasSeenWelcomeDisclaimer = false
@@ -103,6 +104,9 @@ struct PlaylistDetailView: View {
             AutoSortView(playlist: playlist, proposalsByMode: $autoSortProposals) { selected in
                 Task { await createPlaylists(selected) }
             }
+        }
+        .sheet(isPresented: $showQueue) {
+            QueueView(playback: playback)
         }
     }
 
@@ -380,24 +384,32 @@ struct PlaylistDetailView: View {
     @ViewBuilder
     private var nowPlayingBar: some View {
         if let song = nowPlayingSong {
-            HStack(spacing: 10) {
-                if playback.isPlaying {
-                    EqualizerBars(isPlaying: true)
-                } else {
-                    Image(systemName: "pause.fill")
-                        .foregroundStyle(Theme.accentSecondary)
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("NOW PLAYING")
-                        .font(.system(size: 10, weight: .bold))
+            Button { showQueue = true } label: {
+                HStack(spacing: 10) {
+                    if playback.isPlaying {
+                        EqualizerBars(isPlaying: true)
+                    } else {
+                        Image(systemName: "pause.fill")
+                            .foregroundStyle(Theme.accentSecondary)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("NOW PLAYING")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .tracking(1.2)
+                        Text("\(song.title) — \(song.artist)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.secondary)
-                        .tracking(1.2)
-                    Text("\(song.title) — \(song.artist)")
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
                 }
-                Spacer()
+                .foregroundStyle(.white)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
@@ -440,12 +452,11 @@ struct PlaylistDetailView: View {
                 ForEach(Array(playlist.songs.enumerated()), id: \.element.id) { index, song in
                     let isNowPlaying = song.libraryID == playback.nowPlayingLibraryID
 
-                    Button {
-                        Task { await songTapped(song) }
-                    } label: {
-                        trackRow(song: song, index: index, isNowPlaying: isNowPlaying)
-                    }
-                    .buttonStyle(.plain)
+                    trackRow(song: song, index: index, isNowPlaying: isNowPlaying)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            Task { await songTapped(song) }
+                        }
                 }
             }
         }
@@ -461,6 +472,7 @@ struct PlaylistDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("TIME")
                 .frame(width: 50, alignment: .trailing)
+            Color.clear.frame(width: 20)
         }
         .font(.system(size: 10, weight: .bold))
         .foregroundStyle(.secondary)
@@ -505,6 +517,18 @@ struct PlaylistDetailView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(width: 50, alignment: .trailing)
+
+            Menu {
+                Button("Play Next") { Task { await enqueueTapped(song, playNext: true) } }
+                Button("Add to Queue") { Task { await enqueueTapped(song, playNext: false) } }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .frame(width: 20)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
@@ -554,6 +578,19 @@ struct PlaylistDetailView: View {
             } else {
                 try await playback.play(song, from: playlist.songs)
             }
+        } catch {
+            announce(error.localizedDescription)
+        }
+    }
+
+    private func enqueueTapped(_ song: SiftSong, playNext: Bool) async {
+        guard !isDemoMode else {
+            announce("Connect Apple Music to actually queue songs")
+            return
+        }
+        do {
+            try await playback.enqueue(song, playNext: playNext)
+            announce(playNext ? "Playing next" : "Added to queue")
         } catch {
             announce(error.localizedDescription)
         }
