@@ -11,6 +11,8 @@ struct SiftSong: Identifiable, Hashable {
     let album: String
     let genre: String
     let duration: TimeInterval
+    /// The song's own artwork, sized for a small row thumbnail. Nil for demo data.
+    var artworkURL: URL? = nil
 }
 
 struct SiftPlaylist {

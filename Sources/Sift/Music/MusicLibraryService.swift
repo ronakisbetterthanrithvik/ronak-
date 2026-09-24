@@ -60,6 +60,7 @@ final class MusicLibraryService {
         for track in tracks {
             guard case let .song(song) = track else { continue }
             songCache[song.id.rawValue] = song
+            let songArtworkURL = song.artwork?.url(width: 100, height: 100)
             songs.append(
                 SiftSong(
                     libraryID: song.id.rawValue,
@@ -67,7 +68,8 @@ final class MusicLibraryService {
                     artist: song.artistName,
                     album: song.albumTitle ?? "",
                     genre: song.genreNames.first ?? "Unknown",
-                    duration: song.duration ?? 0
+                    duration: song.duration ?? 0,
+                    artworkURL: songArtworkURL
                 )
             )
             if mosaicURLs.count < 4, let url = song.artwork?.url(width: 300, height: 300) {

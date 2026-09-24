@@ -438,23 +438,22 @@ struct PlaylistDetailView: View {
 
     private func trackRow(song: SiftSong, index: Int, isNowPlaying: Bool) -> some View {
         HStack(spacing: 12) {
-            Group {
-                if isNowPlaying {
-                    Image(systemName: playback.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.accentSecondary)
-                } else {
-                    Text("\(index + 1)")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 24, alignment: .leading)
+            rowArtwork(for: song)
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(song.title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(isNowPlaying ? Theme.accentSecondary : .primary)
+                HStack(spacing: 6) {
+                    Text(song.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(isNowPlaying ? Theme.accentSecondary : .primary)
+                        .lineLimit(1)
+                    if isNowPlaying {
+                        Image(systemName: playback.isPlaying ? "waveform" : "pause.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.accentSecondary)
+                    }
+                }
                 Text(song.artist).font(.caption).foregroundStyle(.secondary)
             }
             .frame(width: 280, alignment: .leading)
@@ -479,13 +478,42 @@ struct PlaylistDetailView: View {
         )
     }
 
+    @ViewBuilder
+    private func rowArtwork(for song: SiftSong) -> some View {
+        if let url = song.artworkURL {
+            AsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    rowArtworkPlaceholder
+                }
+            }
+        } else {
+            rowArtworkPlaceholder
+        }
+    }
+
+    private var rowArtworkPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(Theme.accentGradient.opacity(0.5))
+            .overlay(Image(systemName: "music.note").font(.system(size: 14)).foregroundStyle(.white.opacity(0.85)))
+    }
+
     private func songTapped(_ song: SiftSong) async {
         guard !isDemoMode else {
             announce("Connect Apple Music to actually play songs")
             return
         }
         do {
-            try await playback.play(song, from: playlist.songs)
+            if song.libraryID == playback.nowPlayingLibraryID {
+                if playback.isPlaying {
+                    playback.pause()
+                } else {
+                    try await playback.resume()
+                }
+            } else {
+                try await playback.play(song, from: playlist.songs)
+            }
         } catch {
             announce(error.localizedDescription)
         }

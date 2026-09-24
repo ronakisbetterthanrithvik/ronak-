@@ -76,6 +76,14 @@ final class PlaybackService: ObservableObject {
         finishTrackingCurrentTrack()
     }
 
+    /// Resumes whatever's already loaded (from `pause()`), rather than rebuilding the
+    /// queue and starting over — used when tapping the currently-playing row again.
+    func resume() async throws {
+        try await player.play()
+        isPlaying = true
+        trackStartedAt = Date()
+    }
+
     private func start(with songs: [SiftSong]) async throws {
         // Some library songs aren't matched to Apple's streaming catalog and can't be
         // queued at all (that's what "missing play parameters" means at runtime) --
