@@ -1,7 +1,19 @@
 import SwiftUI
+import AppKit
 
 enum Theme {
     static let background = Color(red: 0.043, green: 0.043, blue: 0.058)
+
+    /// The pre-made frosted-glass Sift mark (`Resources/SiftIcon.png`), loaded by
+    /// filename from the app bundle the way `NSImage(named:)` finds any loose bundled
+    /// resource (it doesn't require an asset catalog). Falls back to a plain SF Symbol
+    /// if the file hasn't been added to the Xcode target yet.
+    static var appIcon: Image {
+        if let nsImage = NSImage(named: "SiftIcon") {
+            return Image(nsImage: nsImage)
+        }
+        return Image(systemName: "shuffle")
+    }
 
     // Vivid red/pink identity -- kept as a pure red spectrum (no orange cast) per the
     // reference swatch, deliberately distinct from Apple Music's own signature red since

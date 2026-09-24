@@ -43,7 +43,6 @@ struct PlaylistDetailView: View {
                     isLoading: isLoadingLibrary,
                     errorMessage: libraryError,
                     onSelect: { selectPlaylist($0) },
-                    onUseDemoData: useDemoData,
                     onRetry: { Task { await loadLibraryPlaylists() } }
                 )
             case .ready:

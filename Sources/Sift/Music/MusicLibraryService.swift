@@ -4,6 +4,7 @@ import Foundation
 struct LibraryPlaylistSummary: Identifiable, Hashable {
     let id: String
     let name: String
+    let artworkURL: URL?
 }
 
 enum MusicLibraryError: LocalizedError {
@@ -38,7 +39,9 @@ final class MusicLibraryService {
         var request = MusicLibraryRequest<Playlist>()
         request.limit = 100
         let response = try await request.response()
-        return response.items.map { LibraryPlaylistSummary(id: $0.id.rawValue, name: $0.name) }
+        return response.items.map {
+            LibraryPlaylistSummary(id: $0.id.rawValue, name: $0.name, artworkURL: $0.artwork?.url(width: 300, height: 300))
+        }
     }
 
     func loadPlaylist(id: String) async throws -> SiftPlaylist {
