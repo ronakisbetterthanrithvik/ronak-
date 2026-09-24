@@ -60,7 +60,9 @@ final class MusicLibraryService {
         for track in tracks {
             guard case let .song(song) = track else { continue }
             songCache[song.id.rawValue] = song
-            let songArtworkURL = song.artwork?.url(width: 100, height: 100)
+            // Requested well above the ~40pt row size it renders at, so it stays sharp
+            // on Retina displays instead of upscaling a too-small source image.
+            let songArtworkURL = song.artwork?.url(width: 200, height: 200)
             songs.append(
                 SiftSong(
                     libraryID: song.id.rawValue,
@@ -72,12 +74,10 @@ final class MusicLibraryService {
                     artworkURL: songArtworkURL
                 )
             )
-            if mosaicURLs.count < 4, let url = song.artwork?.url(width: 300, height: 300) {
+            if mosaicURLs.count < 4, let url = song.artwork?.url(width: 400, height: 400) {
                 mosaicURLs.append(url)
             }
         }
-
-        print("Sift DEBUG: playlist artwork = \(detailed.artwork != nil), mosaic URLs collected = \(mosaicURLs.count)")
 
         let genres = Array(Set(songs.map(\.genre))).sorted()
         let artistCounts = Dictionary(grouping: songs, by: \.artist).mapValues(\.count)
@@ -95,7 +95,7 @@ final class MusicLibraryService {
             genresPresent: genres,
             topArtists: Array(topArtists),
             allArtists: allArtists,
-            artworkURL: detailed.artwork?.url(width: 300, height: 300),
+            artworkURL: detailed.artwork?.url(width: 600, height: 600),
             mosaicArtworkURLs: mosaicURLs
         )
     }

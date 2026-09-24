@@ -206,7 +206,8 @@ struct PlaylistDetailView: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Capsule().fill(Color.white.opacity(0.08)))
+            .background(Capsule().fill(.ultraThinMaterial))
+            .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -285,7 +286,8 @@ struct PlaylistDetailView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Capsule().fill(Color.white.opacity(0.06)))
+        .background(Capsule().fill(.ultraThinMaterial))
+        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
     }
 
     // MARK: - Actions
@@ -313,7 +315,8 @@ struct PlaylistDetailView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .padding(.horizontal, 20)
                     .padding(.vertical, 11)
-                    .background(Capsule().fill(Color.white.opacity(0.08)))
+                    .background(Capsule().fill(.ultraThinMaterial))
+                    .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 1))
                     .foregroundStyle(.white)
             }
             .buttonStyle(.plain)
@@ -377,8 +380,12 @@ struct PlaylistDetailView: View {
     private var nowPlayingBar: some View {
         if let song = nowPlayingSong {
             HStack(spacing: 10) {
-                Image(systemName: playback.isPlaying ? "waveform" : "pause.fill")
-                    .foregroundStyle(Theme.accentSecondary)
+                if playback.isPlaying {
+                    EqualizerBars(isPlaying: true)
+                } else {
+                    Image(systemName: "pause.fill")
+                        .foregroundStyle(Theme.accentSecondary)
+                }
                 VStack(alignment: .leading, spacing: 1) {
                     Text("NOW PLAYING")
                         .font(.system(size: 10, weight: .bold))
@@ -411,7 +418,8 @@ struct PlaylistDetailView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 11)
-            .background(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
+            .background(Capsule().fill(.ultraThinMaterial))
+            .overlay(Capsule().stroke(Color.white.opacity(0.18), lineWidth: 1))
             .foregroundStyle(.white)
         }
         .buttonStyle(.plain)
@@ -420,20 +428,39 @@ struct PlaylistDetailView: View {
     // MARK: - Track list
 
     private var trackList: some View {
-        LazyVStack(spacing: 0) {
-            ForEach(Array(playlist.songs.enumerated()), id: \.element.id) { index, song in
-                let isNowPlaying = song.libraryID == playback.nowPlayingLibraryID
+        VStack(spacing: 0) {
+            trackListHeader
+            LazyVStack(spacing: 0) {
+                ForEach(Array(playlist.songs.enumerated()), id: \.element.id) { index, song in
+                    let isNowPlaying = song.libraryID == playback.nowPlayingLibraryID
 
-                Button {
-                    Task { await songTapped(song) }
-                } label: {
-                    trackRow(song: song, index: index, isNowPlaying: isNowPlaying)
+                    Button {
+                        Task { await songTapped(song) }
+                    } label: {
+                        trackRow(song: song, index: index, isNowPlaying: isNowPlaying)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.03)))
+        .background(Theme.glassCard(cornerRadius: 16))
+    }
+
+    private var trackListHeader: some View {
+        HStack(spacing: 12) {
+            Text("SONG")
+                .frame(width: 332, alignment: .leading)
+            Text("ALBUM")
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text("TIME")
+                .frame(width: 50, alignment: .trailing)
+        }
+        .font(.system(size: 10, weight: .bold))
+        .foregroundStyle(.secondary)
+        .tracking(1.2)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 10)
     }
 
     private func trackRow(song: SiftSong, index: Int, isNowPlaying: Bool) -> some View {
@@ -449,9 +476,13 @@ struct PlaylistDetailView: View {
                         .foregroundStyle(isNowPlaying ? Theme.accentSecondary : .primary)
                         .lineLimit(1)
                     if isNowPlaying {
-                        Image(systemName: playback.isPlaying ? "waveform" : "pause.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.accentSecondary)
+                        if playback.isPlaying {
+                            EqualizerBars(isPlaying: true)
+                        } else {
+                            Image(systemName: "pause.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.accentSecondary)
+                        }
                     }
                 }
                 Text(song.artist).font(.caption).foregroundStyle(.secondary)
