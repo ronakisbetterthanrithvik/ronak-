@@ -509,9 +509,12 @@ struct PlaylistDetailView: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 10)
         .background(
-            isNowPlaying
-                ? Theme.accentPrimary.opacity(0.1)
-                : (index.isMultiple(of: 2) ? Color.white.opacity(0.02) : Color.clear)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isNowPlaying ? Theme.accentPrimary.opacity(0.16) : Color.white.opacity(0.03))
+        )
+        .overlay(
+            Theme.glassStroke(RoundedRectangle(cornerRadius: 10, style: .continuous), lineWidth: 0.75)
+                .opacity(isNowPlaying ? 1 : 0.5)
         )
     }
 
