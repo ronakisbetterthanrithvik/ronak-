@@ -1,5 +1,6 @@
 import MusicKit
 import Foundation
+import Combine
 
 /// Wraps `ApplicationMusicPlayer` and feeds every play/skip back into
 /// `ListeningHistoryStore`, which is the first-party signal `SmartControlEngine` scores on.
@@ -58,10 +59,11 @@ final class PlaybackService: ObservableObject {
     }
 
     private func currentLibraryID() -> String? {
-        guard let item = player.queue.currentEntry?.item, case let song as Song = item else {
-            return nil
+        guard let item = player.queue.currentEntry?.item else { return nil }
+        if case let .song(song) = item {
+            return song.id.rawValue
         }
-        return song.id.rawValue
+        return nil
     }
 
     private func beginTrackingCurrentEntry() {
