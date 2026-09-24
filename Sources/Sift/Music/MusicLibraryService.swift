@@ -7,6 +7,14 @@ struct LibraryPlaylistSummary: Identifiable, Hashable {
     let artworkURL: URL?
 }
 
+/// A playlist's real cover -- its own custom artwork if it has one, or (for a personal
+/// playlist without custom art, which is most of them) up to four of its own tracks'
+/// artwork to build the same 2x2 mosaic Apple Music itself shows for that playlist.
+struct PlaylistCoverArtwork {
+    let singleURL: URL?
+    let mosaicURLs: [URL]
+}
+
 enum MusicLibraryError: LocalizedError {
     case playlistNotFound
     case noSongsToCreatePlaylistFrom
@@ -41,6 +49,37 @@ final class MusicLibraryService {
         let response = try await request.response()
         return response.items.map {
             LibraryPlaylistSummary(id: $0.id.rawValue, name: $0.name, artworkURL: $0.artwork?.url(width: 300, height: 300))
+        }
+    }
+
+    /// The lightweight `fetchPlaylists()` list only gets a playlist's `artwork` when it
+    /// already has custom art (most user playlists don't). For the rest, this loads that
+    /// one playlist's tracks -- the same call `loadPlaylist` makes when actually opening
+    /// it -- just to sample a handful of song artworks for a mosaic. Used lazily, only
+    /// for playlists the picker's carousel actually scrolls to, and cached by the caller.
+    func loadPlaylistCoverArtwork(id: String) async -> PlaylistCoverArtwork {
+        do {
+            var request = MusicLibraryRequest<Playlist>()
+            request.filter(matching: \.id, equalTo: MusicItemID(id))
+            let response = try await request.response()
+            guard let basePlaylist = response.items.first else {
+                return PlaylistCoverArtwork(singleURL: nil, mosaicURLs: [])
+            }
+
+            let detailed = try await basePlaylist.with(.tracks)
+            if let artworkURL = detailed.artwork?.url(width: 300, height: 300) {
+                return PlaylistCoverArtwork(singleURL: artworkURL, mosaicURLs: [])
+            }
+
+            var mosaicURLs: [URL] = []
+            for track in (detailed.tracks ?? []).prefix(20) {
+                guard case let .song(song) = track, let url = song.artwork?.url(width: 200, height: 200) else { continue }
+                mosaicURLs.append(url)
+                if mosaicURLs.count == 4 { break }
+            }
+            return PlaylistCoverArtwork(singleURL: nil, mosaicURLs: mosaicURLs)
+        } catch {
+            return PlaylistCoverArtwork(singleURL: nil, mosaicURLs: [])
         }
     }
 
