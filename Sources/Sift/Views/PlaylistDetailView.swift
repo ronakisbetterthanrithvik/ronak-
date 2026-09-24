@@ -211,8 +211,7 @@ struct PlaylistDetailView: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Theme.glassFill(Capsule()))
-            .overlay(Theme.glassStroke(Capsule()))
+            .glassSurface(Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -291,8 +290,7 @@ struct PlaylistDetailView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Theme.glassFill(Capsule()))
-        .overlay(Theme.glassStroke(Capsule()))
+        .glassSurface(Capsule())
     }
 
     // MARK: - Actions
@@ -320,8 +318,7 @@ struct PlaylistDetailView: View {
                     .font(.system(size: 14, weight: .semibold))
                     .padding(.horizontal, 20)
                     .padding(.vertical, 11)
-                    .background(Theme.glassFill(Capsule()))
-                    .overlay(Theme.glassStroke(Capsule()))
+                    .glassSurface(Capsule())
                     .foregroundStyle(.white)
             }
             .buttonStyle(.plain)
@@ -412,13 +409,8 @@ struct PlaylistDetailView: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.accentPrimary.opacity(0.2))
-                }
-            )
-            .overlay(Theme.glassStroke(RoundedRectangle(cornerRadius: 12, style: .continuous)))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.accentPrimary.opacity(0.2)))
+            .glassSurface(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
 
@@ -436,8 +428,7 @@ struct PlaylistDetailView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 11)
-            .background(Theme.glassFill(Capsule()))
-            .overlay(Theme.glassStroke(Capsule()))
+            .glassSurface(Capsule())
             .foregroundStyle(.white)
         }
         .buttonStyle(.plain)
@@ -461,7 +452,7 @@ struct PlaylistDetailView: View {
             }
         }
         .padding(16)
-        .background(Theme.glassCard(cornerRadius: 16))
+        .glassSurface(RoundedRectangle(cornerRadius: 16, style: .continuous), lineWidth: 1.25)
     }
 
     private var trackListHeader: some View {
@@ -534,12 +525,9 @@ struct PlaylistDetailView: View {
         .padding(.horizontal, 10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isNowPlaying ? Theme.accentPrimary.opacity(0.16) : Color.white.opacity(0.03))
+                .fill(isNowPlaying ? Theme.accentPrimary.opacity(0.16) : Color.clear)
         )
-        .overlay(
-            Theme.glassStroke(RoundedRectangle(cornerRadius: 10, style: .continuous), lineWidth: 0.75)
-                .opacity(isNowPlaying ? 1 : 0.5)
-        )
+        .glassSurface(RoundedRectangle(cornerRadius: 10, style: .continuous), lineWidth: 0.75)
     }
 
     @ViewBuilder

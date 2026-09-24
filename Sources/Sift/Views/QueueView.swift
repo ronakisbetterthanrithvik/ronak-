@@ -50,9 +50,8 @@ struct QueueView: View {
             }
         }
         .frame(width: 460, height: 560)
-        .background(Theme.glassFill(RoundedRectangle(cornerRadius: 20, style: .continuous)))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(Theme.glassStroke(RoundedRectangle(cornerRadius: 20, style: .continuous), lineWidth: 1.25))
+        .glassSurface(RoundedRectangle(cornerRadius: 20, style: .continuous), lineWidth: 1.25)
     }
 
     private var header: some View {
@@ -95,9 +94,7 @@ struct QueueView: View {
                 Button { Task { await playback.skipToPrevious() } } label: {
                     Image(systemName: "backward.fill")
                         .frame(width: 40, height: 40)
-                        .background(Theme.glassFill(Circle()))
-                        .overlay(Theme.glassStroke(Circle(), lineWidth: 1))
-                        .clipShape(Circle())
+                        .glassSurface(Circle())
                 }
 
                 Button {
@@ -114,9 +111,7 @@ struct QueueView: View {
                 Button { Task { await playback.skipToNext() } } label: {
                     Image(systemName: "forward.fill")
                         .frame(width: 40, height: 40)
-                        .background(Theme.glassFill(Circle()))
-                        .overlay(Theme.glassStroke(Circle(), lineWidth: 1))
-                        .clipShape(Circle())
+                        .glassSurface(Circle())
                 }
                 .disabled(playback.queuedSongs.count <= 1)
                 Spacer()
@@ -126,7 +121,7 @@ struct QueueView: View {
             .foregroundStyle(.white)
         }
         .padding(20)
-        .background(Theme.glassCard(cornerRadius: 16))
+        .glassSurface(RoundedRectangle(cornerRadius: 16, style: .continuous), lineWidth: 1.25)
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
@@ -149,9 +144,7 @@ struct QueueView: View {
             .buttonStyle(.plain)
         }
         .padding(10)
-        .background(Theme.glassFill(RoundedRectangle(cornerRadius: 10, style: .continuous)))
-        .overlay(Theme.glassStroke(RoundedRectangle(cornerRadius: 10, style: .continuous), lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .glassSurface(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     @ViewBuilder

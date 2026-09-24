@@ -34,77 +34,93 @@ enum Theme {
                 .offset(x: 220, y: -40)
         }
     }
+}
 
-    /// A thin diagonal iridescent streak that continuously sweeps across the surface --
-    /// white catching the light, then a hint of pink and cool blue -- like a prism edge
-    /// on real glass. Driven by `TimelineView` so it's genuinely animated, not a static
-    /// gradient. Blended additively so it brightens rather than muddying what's underneath.
-    static func prismSheen<S: Shape>(_ shape: S) -> some View {
-        TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            let phase = (sin(t / 1.8) + 1) / 2 // oscillates 0...1
+/// Cursor-reactive Apple-glass surface: material + a soft prism highlight and rainbow
+/// rim that track the mouse, like light catching a real glass edge as you move over it.
+///
+/// This replaces an earlier version driven by `TimelineView`, which redrew an
+/// `AngularGradient` on every single display frame -- fine for a couple of buttons, but
+/// once the same treatment sat on every row of a 1,000+ song track list, dozens of
+/// on-screen rows were all animating every frame at once and it visibly lagged while
+/// scrolling. Tracking `onContinuousHover` instead means a row only ever recomputes
+/// when the mouse is actually over it, and everything else stays static.
+private struct GlassSurfaceModifier<S: Shape>: ViewModifier {
+    let shape: S
+    let lineWidth: CGFloat
+    @State private var hoverLocation: CGPoint?
 
-            shape
-                .fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: max(0, phase - 0.22)),
-                            .init(color: Color.white.opacity(0.45), location: phase),
-                            .init(color: Color(red: 1.0, green: 0.6, blue: 0.8).opacity(0.34), location: min(1, phase + 0.08)),
-                            .init(color: Color(red: 0.55, green: 0.75, blue: 1.0).opacity(0.26), location: min(1, phase + 0.16)),
-                            .init(color: .clear, location: min(1, phase + 0.34))
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .blendMode(.plusLighter)
-        }
-    }
-
-    /// A rotating rainbow-tinted rim, like light catching a glass edge from different
-    /// angles -- also `TimelineView`-driven, so the color genuinely shifts over time
-    /// instead of sitting as one fixed gradient.
-    static func glassStroke<S: Shape>(_ shape: S, lineWidth: CGFloat = 1) -> some View {
-        TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            let angle = Angle(degrees: t.truncatingRemainder(dividingBy: 8) / 8 * 360)
-
-            shape.stroke(
-                AngularGradient(
-                    gradient: Gradient(colors: [
-                        Color.white.opacity(0.75),
-                        accentSecondary.opacity(0.65),
-                        Color(red: 0.6, green: 0.75, blue: 1.0).opacity(0.55),
-                        Color.white.opacity(0.18),
-                        Color.white.opacity(0.75)
-                    ]),
-                    center: .center,
-                    angle: angle
-                ),
-                lineWidth: lineWidth
+    func body(content: Content) -> some View {
+        content
+            .background(
+                GeometryReader { geo in
+                    ZStack {
+                        shape.fill(.ultraThinMaterial)
+                        shape.fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.14), Color.white.opacity(0.02)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        if let hoverLocation {
+                            shape
+                                .fill(
+                                    RadialGradient(
+                                        colors: [
+                                            Color.white.opacity(0.55),
+                                            Color(red: 1.0, green: 0.6, blue: 0.8).opacity(0.4),
+                                            Color(red: 0.55, green: 0.75, blue: 1.0).opacity(0.26),
+                                            .clear
+                                        ],
+                                        center: UnitPoint(
+                                            x: geo.size.width > 0 ? hoverLocation.x / geo.size.width : 0.5,
+                                            y: geo.size.height > 0 ? hoverLocation.y / geo.size.height : 0.5
+                                        ),
+                                        startRadius: 0,
+                                        endRadius: max(geo.size.width, geo.size.height) * 0.7
+                                    )
+                                )
+                                .blendMode(.plusLighter)
+                        }
+                    }
+                }
             )
-        }
-    }
-
-    /// The glass fill: material, a soft directional highlight, and the animated prism
-    /// streak layered together so surfaces catch light like a real glass pane.
-    static func glassFill<S: Shape>(_ shape: S) -> some View {
-        ZStack {
-            shape.fill(.ultraThinMaterial)
-            shape.fill(
-                LinearGradient(
-                    colors: [Color.white.opacity(0.14), Color.white.opacity(0.02)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+            .overlay(
+                shape.stroke(
+                    AngularGradient(
+                        gradient: Gradient(colors: hoverLocation == nil
+                            ? [
+                                Color.white.opacity(0.3), Theme.accentSecondary.opacity(0.22),
+                                Color.white.opacity(0.12), Color.white.opacity(0.3)
+                            ]
+                            : [
+                                Color.white.opacity(0.9), Theme.accentSecondary.opacity(0.8),
+                                Color(red: 0.6, green: 0.75, blue: 1.0).opacity(0.7),
+                                Color.white.opacity(0.3), Color.white.opacity(0.9)
+                            ]
+                        ),
+                        center: .center
+                    ),
+                    lineWidth: lineWidth
                 )
             )
-            prismSheen(shape)
-        }
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location):
+                    hoverLocation = location
+                case .ended:
+                    hoverLocation = nil
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: hoverLocation == nil)
     }
+}
 
-    static func glassCard(cornerRadius: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        return glassFill(shape).overlay(glassStroke(shape, lineWidth: 1.25))
+extension View {
+    /// Applies the cursor-reactive glass surface (material + hover-tracking prism
+    /// highlight + rainbow rim) to any shape -- buttons, cards, list rows, sheet chrome.
+    func glassSurface<S: Shape>(_ shape: S, lineWidth: CGFloat = 1) -> some View {
+        modifier(GlassSurfaceModifier(shape: shape, lineWidth: lineWidth))
     }
 }
