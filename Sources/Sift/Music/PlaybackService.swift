@@ -72,10 +72,13 @@ final class PlaybackService: ObservableObject {
                 .filter { $0.playParameters != nil }
                 .prefix(maxQueueSize)
         )
+        print("Sift DEBUG: \(musicKitSongs.count) playable songs out of \(songs.count) total")
         guard !musicKitSongs.isEmpty else { throw PlaybackError.noPlayableSongs }
 
         player.queue = ApplicationMusicPlayer.Queue(for: musicKitSongs)
+        print("Sift DEBUG: queue built with first song '\(musicKitSongs[0].title)', calling play()")
         try await player.play()
+        print("Sift DEBUG: play() returned successfully, playbackStatus=\(player.state.playbackStatus)")
         isPlaying = true
         beginTrackingCurrentEntry()
     }

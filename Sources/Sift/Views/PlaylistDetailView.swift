@@ -273,6 +273,7 @@ struct PlaylistDetailView: View {
         do {
             try await playback.playInOrder(playlist.songs)
         } catch {
+            print("Sift DEBUG: playTapped failed — \(error)")
             announce(error.localizedDescription)
         }
     }
@@ -285,6 +286,7 @@ struct PlaylistDetailView: View {
         do {
             try await playback.shufflePlay(playlist.songs, settings: smartControlSettings)
         } catch {
+            print("Sift DEBUG: shuffleTapped failed — \(error)")
             announce(error.localizedDescription)
         }
     }
