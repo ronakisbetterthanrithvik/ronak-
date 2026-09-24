@@ -73,6 +73,7 @@ struct PlaylistDetailView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    backButton
                     header
                     actionRow
                     trackList
@@ -184,16 +185,29 @@ struct PlaylistDetailView: View {
 
             Spacer()
 
-            VStack(alignment: .trailing, spacing: 8) {
-                appBadge
-                if !isDemoMode {
-                    Button("Switch Playlist") { Task { await loadLibraryPlaylists() } }
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .foregroundStyle(Theme.accentSecondary)
-                }
-            }
+            appBadge
         }
+    }
+
+    private var backButton: some View {
+        Button {
+            if isDemoMode {
+                stage = .connecting
+            } else {
+                Task { await loadLibraryPlaylists() }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.left")
+                Text(isDemoMode ? "Connect Apple Music" : "Back to Playlists")
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Color.white.opacity(0.08)))
+        }
+        .buttonStyle(.plain)
     }
 
     private var artwork: some View {

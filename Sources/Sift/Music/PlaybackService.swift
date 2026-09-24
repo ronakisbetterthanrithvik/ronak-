@@ -63,8 +63,14 @@ final class PlaybackService: ObservableObject {
     }
 
     private func start(with songs: [SiftSong]) async throws {
+        // Some library songs aren't matched to Apple's streaming catalog and can't be
+        // queued at all (that's what "missing play parameters" means at runtime) --
+        // filter those out ourselves instead of letting them choke queue construction.
         let musicKitSongs = Array(
-            songs.compactMap { MusicLibraryService.shared.song(for: $0.libraryID) }.prefix(maxQueueSize)
+            songs
+                .compactMap { MusicLibraryService.shared.song(for: $0.libraryID) }
+                .filter { $0.playParameters != nil }
+                .prefix(maxQueueSize)
         )
         guard !musicKitSongs.isEmpty else { throw PlaybackError.noPlayableSongs }
 
