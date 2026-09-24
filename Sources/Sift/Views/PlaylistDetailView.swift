@@ -436,8 +436,6 @@ struct PlaylistDetailView: View {
                         .contentShape(Rectangle())
                     }
 
-                    Spacer()
-
                     Button { showQueue = true } label: {
                         Image(systemName: "list.bullet")
                             .font(.system(size: 13, weight: .semibold))
@@ -450,11 +448,9 @@ struct PlaylistDetailView: View {
                 playbackProgressLine(for: song)
                     .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(Capsule().fill(.ultraThinMaterial))
-            .background(Capsule().fill(Color.black.opacity(0.5)))
-            .padding(.horizontal, 40)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Color.black.opacity(0.92)))
             .padding(.bottom, 16)
         }
     }
