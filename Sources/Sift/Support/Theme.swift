@@ -49,15 +49,20 @@ enum Theme {
         let peak = hoverLocation == nil ? baseOpacity + 0.18 : min(baseOpacity + 0.65, 0.95)
         let base = hoverLocation == nil ? baseOpacity : baseOpacity * 0.55
 
+        // AngularGradient's `angle` marks location 0.0 of the stop list (not the
+        // midpoint), so the bright band has to sit at 0.0/1.0 -- the two ends of the
+        // list, which are adjacent on the circle since it wraps -- for the highlight to
+        // actually land at `angle` instead of 180 degrees opposite it.
         return AngularGradient(
             gradient: Gradient(stops: [
-                .init(color: Color.white.opacity(base), location: 0.0),
-                .init(color: Color.white.opacity(base), location: 0.36),
-                .init(color: Color.white.opacity(peak), location: 0.5),
-                .init(color: accentSecondary.opacity(peak * 0.85), location: 0.56),
-                .init(color: Color(red: 0.6, green: 0.75, blue: 1.0).opacity(peak * 0.7), location: 0.62),
-                .init(color: Color.white.opacity(base), location: 0.74),
-                .init(color: Color.white.opacity(base), location: 1.0)
+                .init(color: Color.white.opacity(peak), location: 0.0),
+                .init(color: accentSecondary.opacity(peak * 0.85), location: 0.05),
+                .init(color: Color(red: 0.6, green: 0.75, blue: 1.0).opacity(peak * 0.7), location: 0.1),
+                .init(color: Color.white.opacity(base), location: 0.24),
+                .init(color: Color.white.opacity(base), location: 0.76),
+                .init(color: Color(red: 0.6, green: 0.75, blue: 1.0).opacity(peak * 0.7), location: 0.9),
+                .init(color: accentSecondary.opacity(peak * 0.85), location: 0.95),
+                .init(color: Color.white.opacity(peak), location: 1.0)
             ]),
             center: .center,
             angle: angle
