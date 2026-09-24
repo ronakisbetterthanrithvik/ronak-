@@ -34,7 +34,11 @@ final class PlaybackService: ObservableObject {
 
     @Published var isPlaying = false
 
-    private var trackedLibraryID: String?
+    /// The library ID of whatever's currently loaded in the player, so the UI can show
+    /// a "Now Playing" indicator and highlight the matching row in the track list. Stays
+    /// set while paused — it only clears once nothing is loaded at all.
+    @Published private(set) var nowPlayingLibraryID: String?
+
     private var trackStartedAt: Date?
 
     func playInOrder(_ songs: [SiftSong]) async throws {
@@ -72,18 +76,15 @@ final class PlaybackService: ObservableObject {
                 .filter { $0.playParameters != nil }
                 .prefix(maxQueueSize)
         )
-        print("Sift DEBUG: \(musicKitSongs.count) playable songs out of \(songs.count) total")
         guard !musicKitSongs.isEmpty else { throw PlaybackError.noPlayableSongs }
 
         player.queue = ApplicationMusicPlayer.Queue(for: musicKitSongs)
-        print("Sift DEBUG: queue built with first song '\(musicKitSongs[0].title)', calling play()")
         try await player.play()
-        print("Sift DEBUG: play() returned successfully, playbackStatus=\(player.state.playbackStatus)")
         isPlaying = true
         beginTrackingCurrentEntry()
     }
 
-    private func currentLibraryID() -> String? {
+    private func resolveCurrentLibraryID() -> String? {
         guard let item = player.queue.currentEntry?.item else { return nil }
         if case let .song(song) = item {
             return song.id.rawValue
@@ -92,19 +93,19 @@ final class PlaybackService: ObservableObject {
     }
 
     private func beginTrackingCurrentEntry() {
-        trackedLibraryID = currentLibraryID()
+        let libraryID = resolveCurrentLibraryID()
+        nowPlayingLibraryID = libraryID
         trackStartedAt = Date()
     }
 
     private func finishTrackingCurrentTrack() {
-        guard let libraryID = trackedLibraryID, let startedAt = trackStartedAt else { return }
+        guard let libraryID = nowPlayingLibraryID, let startedAt = trackStartedAt else { return }
         let elapsed = Date().timeIntervalSince(startedAt)
         if elapsed < skipThreshold {
             history.recordSkip(libraryID: libraryID)
         } else {
             history.recordPlay(libraryID: libraryID, seconds: elapsed)
         }
-        trackedLibraryID = nil
         trackStartedAt = nil
     }
 }

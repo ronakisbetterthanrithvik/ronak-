@@ -76,6 +76,7 @@ struct PlaylistDetailView: View {
                     backButton
                     header
                     actionRow
+                    nowPlayingBar
                     trackList
                 }
                 .padding(28)
@@ -211,11 +212,28 @@ struct PlaylistDetailView: View {
     }
 
     private var artwork: some View {
+        Group {
+            if let url = playlist.artworkURL {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        artworkPlaceholder
+                    }
+                }
+            } else {
+                artworkPlaceholder
+            }
+        }
+        .frame(width: 120, height: 120)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: Theme.accentPrimary.opacity(0.4), radius: 20, y: 10)
+    }
+
+    private var artworkPlaceholder: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
             .fill(Theme.accentGradient)
-            .frame(width: 120, height: 120)
             .overlay(Image(systemName: "music.note.list").font(.system(size: 36)).foregroundStyle(.white.opacity(0.9)))
-            .shadow(color: Theme.accentPrimary.opacity(0.4), radius: 20, y: 10)
     }
 
     private var appBadge: some View {
@@ -312,6 +330,35 @@ struct PlaylistDetailView: View {
         }
     }
 
+    private var nowPlayingSong: SiftSong? {
+        guard let id = playback.nowPlayingLibraryID else { return nil }
+        return playlist.songs.first { $0.libraryID == id }
+    }
+
+    @ViewBuilder
+    private var nowPlayingBar: some View {
+        if let song = nowPlayingSong {
+            HStack(spacing: 10) {
+                Image(systemName: playback.isPlaying ? "waveform" : "pause.fill")
+                    .foregroundStyle(Theme.accentSecondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("NOW PLAYING")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .tracking(1.2)
+                    Text("\(song.title) — \(song.artist)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.accentPrimary.opacity(0.12)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.accentPrimary.opacity(0.3), lineWidth: 1))
+        }
+    }
+
     private func toolButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -337,33 +384,48 @@ struct PlaylistDetailView: View {
     private var trackList: some View {
         LazyVStack(spacing: 0) {
             ForEach(Array(playlist.songs.enumerated()), id: \.element.id) { index, song in
-                HStack {
-                    Text("\(index + 1)")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 24, alignment: .leading)
+                let isNowPlaying = song.libraryID == playback.nowPlayingLibraryID
+
+                HStack(spacing: 12) {
+                    Group {
+                        if isNowPlaying {
+                            Image(systemName: playback.isPlaying ? "speaker.wave.2.fill" : "pause.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.accentSecondary)
+                        } else {
+                            Text("\(index + 1)")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(width: 24, alignment: .leading)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(song.title).font(.system(size: 14, weight: .medium))
+                        Text(song.title)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(isNowPlaying ? Theme.accentSecondary : .primary)
                         Text(song.artist).font(.caption).foregroundStyle(.secondary)
                     }
-
-                    Spacer()
+                    .frame(width: 280, alignment: .leading)
 
                     Text(song.album)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-
-                    Spacer()
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     Text(song.duration.asClockString)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .frame(width: 50, alignment: .trailing)
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 10)
-                .background(index.isMultiple(of: 2) ? Color.white.opacity(0.02) : Color.clear)
+                .background(
+                    isNowPlaying
+                        ? Theme.accentPrimary.opacity(0.1)
+                        : (index.isMultiple(of: 2) ? Color.white.opacity(0.02) : Color.clear)
+                )
             }
         }
         .padding(16)

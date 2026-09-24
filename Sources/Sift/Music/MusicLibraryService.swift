@@ -86,7 +86,8 @@ final class MusicLibraryService {
             songs: songs,
             genresPresent: genres,
             topArtists: Array(topArtists),
-            allArtists: allArtists
+            allArtists: allArtists,
+            artworkURL: detailed.artwork?.url(width: 300, height: 300)
         )
     }
 

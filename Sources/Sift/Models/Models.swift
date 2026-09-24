@@ -24,6 +24,8 @@ struct SiftPlaylist {
     let genresPresent: [String]
     let topArtists: [String]
     let allArtists: [String]
+    /// The playlist's real cover art, sized on request. Nil for demo data or playlists without artwork.
+    var artworkURL: URL? = nil
 }
 
 enum Weight: String, CaseIterable, Identifiable, Hashable {
