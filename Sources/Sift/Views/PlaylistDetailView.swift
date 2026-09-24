@@ -236,8 +236,14 @@ struct PlaylistDetailView: View {
 
     private var actionRow: some View {
         HStack(spacing: 12) {
-            Button { Task { await playTapped() } } label: {
-                Label("Play", systemImage: "play.fill")
+            Button {
+                if playback.isPlaying {
+                    playback.pause()
+                } else {
+                    Task { await playTapped() }
+                }
+            } label: {
+                Label(playback.isPlaying ? "Pause" : "Play", systemImage: playback.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .padding(.horizontal, 22)
                     .padding(.vertical, 11)
