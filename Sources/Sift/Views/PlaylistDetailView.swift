@@ -256,7 +256,11 @@ struct PlaylistDetailView: View {
             announce("Connect Apple Music to actually play songs")
             return
         }
-        await playback.playInOrder(playlist.songs)
+        do {
+            try await playback.playInOrder(playlist.songs)
+        } catch {
+            announce(error.localizedDescription)
+        }
     }
 
     private func shuffleTapped() async {
@@ -264,7 +268,11 @@ struct PlaylistDetailView: View {
             announce("Connect Apple Music to actually play songs")
             return
         }
-        await playback.shufflePlay(playlist.songs, settings: smartControlSettings)
+        do {
+            try await playback.shufflePlay(playlist.songs, settings: smartControlSettings)
+        } catch {
+            announce(error.localizedDescription)
+        }
     }
 
     private func createPlaylists(_ proposals: [ProposedPlaylist]) async {

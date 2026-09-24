@@ -2,6 +2,17 @@ import MusicKit
 import Foundation
 import Combine
 
+enum PlaybackError: LocalizedError {
+    case noPlayableSongs
+
+    var errorDescription: String? {
+        switch self {
+        case .noPlayableSongs:
+            return "None of these songs are available to stream through Apple Music right now."
+        }
+    }
+}
+
 /// Wraps `ApplicationMusicPlayer` and feeds every play/skip back into
 /// `ListeningHistoryStore`, which is the first-party signal `SmartControlEngine` scores on.
 @MainActor
@@ -14,18 +25,25 @@ final class PlaybackService: ObservableObject {
     /// A skip counts as leaving a track before this many seconds of listening.
     private let skipThreshold: TimeInterval = 20
 
+    /// A full playlist (Sift has seen library playlists well over 1,000 songs) is too
+    /// much to hand `ApplicationMusicPlayer.Queue` at once — building that many entries
+    /// is slow and, combined with any songs missing play parameters (not catalog-matched,
+    /// see `MusicLibraryService`), can stall playback with nothing audible. Queue a
+    /// reasonable batch instead, like a real player would.
+    private let maxQueueSize = 50
+
     @Published var isPlaying = false
 
     private var trackedLibraryID: String?
     private var trackStartedAt: Date?
 
-    func playInOrder(_ songs: [SiftSong]) async {
-        await start(with: songs)
+    func playInOrder(_ songs: [SiftSong]) async throws {
+        try await start(with: songs)
     }
 
-    func shufflePlay(_ songs: [SiftSong], settings: SmartControlSettings) async {
+    func shufflePlay(_ songs: [SiftSong], settings: SmartControlSettings) async throws {
         let ordered = SmartControlEngine.orderedQueue(songs: songs, settings: settings)
-        await start(with: ordered)
+        try await start(with: ordered)
     }
 
     func skipToNext() async {
@@ -44,18 +62,16 @@ final class PlaybackService: ObservableObject {
         finishTrackingCurrentTrack()
     }
 
-    private func start(with songs: [SiftSong]) async {
-        let musicKitSongs = songs.compactMap { MusicLibraryService.shared.song(for: $0.libraryID) }
-        guard !musicKitSongs.isEmpty else { return }
+    private func start(with songs: [SiftSong]) async throws {
+        let musicKitSongs = Array(
+            songs.compactMap { MusicLibraryService.shared.song(for: $0.libraryID) }.prefix(maxQueueSize)
+        )
+        guard !musicKitSongs.isEmpty else { throw PlaybackError.noPlayableSongs }
 
-        do {
-            player.queue = ApplicationMusicPlayer.Queue(for: musicKitSongs)
-            try await player.play()
-            isPlaying = true
-            beginTrackingCurrentEntry()
-        } catch {
-            print("Sift: playback failed — \(error)")
-        }
+        player.queue = ApplicationMusicPlayer.Queue(for: musicKitSongs)
+        try await player.play()
+        isPlaying = true
+        beginTrackingCurrentEntry()
     }
 
     private func currentLibraryID() -> String? {
