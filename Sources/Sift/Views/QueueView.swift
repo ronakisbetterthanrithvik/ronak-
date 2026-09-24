@@ -21,31 +21,37 @@ struct QueueView: View {
                     Divider().overlay(Color.white.opacity(0.08))
                 }
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if upNext.isEmpty {
-                            Text("Nothing queued after this.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .padding(40)
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text("UP NEXT")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .tracking(1.2)
-                                .padding(.top, 16)
-                                .padding(.horizontal, 20)
+                if upNext.isEmpty {
+                    Text("Nothing queued after this.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(40)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    Text("UP NEXT")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .tracking(1.2)
+                        .padding(.top, 16)
+                        .padding(.horizontal, 20)
 
-                            VStack(spacing: 8) {
-                                ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, song in
-                                    queueRow(song, queueIndex: offset + 1)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 20)
+                    // A real List (not a plain ForEach in a ScrollView) so drag-to-reorder
+                    // works with macOS's own animated reordering -- dragging a row here
+                    // slides the others out of the way, then settles the queue in the new
+                    // order once you drop it.
+                    List {
+                        ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, song in
+                            queueRow(song, queueIndex: offset + 1)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+                        }
+                        .onMove { source, destination in
+                            playback.moveQueuedSongs(fromUpNextOffsets: source, toUpNextOffset: destination)
                         }
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
             }
         }
@@ -71,26 +77,32 @@ struct QueueView: View {
     }
 
     private func nowPlayingSection(_ song: SiftSong) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 16) {
             Text("NOW PLAYING")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.secondary)
                 .tracking(1.2)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 12) {
-                artwork(for: song, size: 52)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(song.title).font(.system(size: 15, weight: .semibold))
-                    Text(song.artist).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if playback.isPlaying {
-                    EqualizerBars(isPlaying: true)
+            artwork(for: song, size: 120)
+                .shadow(color: Theme.accentPrimary.opacity(0.35), radius: 16, y: 8)
+
+            VStack(spacing: 4) {
+                Text(song.title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    if playback.isPlaying {
+                        EqualizerBars(isPlaying: true)
+                    }
+                    Text(song.artist)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
             }
 
             HStack(spacing: 24) {
-                Spacer()
                 Button { Task { await playback.skipToPrevious() } } label: {
                     Image(systemName: "backward.fill")
                         .frame(width: 40, height: 40)
@@ -114,12 +126,12 @@ struct QueueView: View {
                         .glassSurface(Circle())
                 }
                 .disabled(playback.queuedSongs.count <= 1)
-                Spacer()
             }
             .buttonStyle(.plain)
             .font(.system(size: 16, weight: .semibold))
             .foregroundStyle(.white)
         }
+        .frame(maxWidth: .infinity)
         .padding(20)
         .glassEdge(RoundedRectangle(cornerRadius: 16, style: .continuous), lineWidth: 1, baseOpacity: 0.4)
         .padding(.horizontal, 20)

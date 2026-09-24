@@ -127,6 +127,34 @@ final class PlaybackService: ObservableObject {
         }
     }
 
+    /// Reorders the "up next" portion of the queue (offsets exclude the currently
+    /// playing song at `queuedSongs[0]`) to match a drag-to-reorder gesture in the UI,
+    /// and mirrors the same move into MusicKit's real queue so what plays next actually
+    /// matches what's shown.
+    ///
+    /// - Note: relies on `player.queue.entries` supporting `remove(at:)`/`insert(_:at:)`,
+    ///   the same assumption `removeFromQueue` already makes — if this doesn't compile
+    ///   against your SDK, Xcode's autocomplete on `player.queue.entries.` will show the
+    ///   current mutation API.
+    func moveQueuedSongs(fromUpNextOffsets source: IndexSet, toUpNextOffset destination: Int) {
+        guard queuedSongs.count > 1, let sourceOffset = source.first, source.count == 1 else { return }
+
+        var upNext = Array(queuedSongs.dropFirst())
+        guard upNext.indices.contains(sourceOffset) else { return }
+        let moved = upNext[sourceOffset]
+        upNext.move(fromOffsets: source, toOffset: destination)
+        queuedSongs = [queuedSongs[0]] + upNext
+
+        guard let entryIndex = player.queue.entries.firstIndex(where: { entry in
+            guard case let .song(song) = entry.item else { return false }
+            return song.id.rawValue == moved.libraryID
+        }) else { return }
+        let entry = player.queue.entries.remove(at: entryIndex)
+        let newUpNextIndex = upNext.firstIndex(where: { $0.libraryID == moved.libraryID }) ?? upNext.count
+        let insertionIndex = min(newUpNextIndex + 1, player.queue.entries.count)
+        player.queue.entries.insert(entry, at: insertionIndex)
+    }
+
     /// Adds a song to the queue without interrupting what's currently playing — either
     /// right after the current song (`playNext: true`) or at the very end.
     ///
