@@ -9,8 +9,11 @@ enum SmartControlEngine {
         let artistFilter = settings.selectedArtists
 
         let eligible = songs.filter { song in
-            (genreFilter.isEmpty || genreFilter.contains(song.genre)) &&
-            (artistFilter.isEmpty || artistFilter.contains(song.artist))
+            // A song credited to multiple artists ("Playboi Carti & Travis Scott") should
+            // match a filter on any one of its credited artists, not just the full string.
+            let songArtists = Set(song.artist.splitArtistCredits())
+            return (genreFilter.isEmpty || genreFilter.contains(song.genre)) &&
+                (artistFilter.isEmpty || !artistFilter.isDisjoint(with: songArtists))
         }
 
         guard !eligible.isEmpty else { return songs.shuffled() }

@@ -17,66 +17,84 @@ enum Theme {
         endPoint: .bottomTrailing
     )
 
-    /// Large, heavily blurred shapes sitting behind glass surfaces so Material has
-    /// something colorful to actually refract -- spread across the whole scroll area
-    /// (not just near the header), since a card further down with nothing colorful
-    /// behind it just reads as plain dark gray.
+    /// A couple of soft, localized blurred shapes near the header -- just enough for
+    /// glass surfaces nearby to have something colorful to refract, without washing the
+    /// whole window in color the way a larger/brighter version did.
     static var ambientGlow: some View {
         ZStack {
             Circle()
-                .fill(accentPrimary.opacity(0.4))
-                .frame(width: 620, height: 620)
-                .blur(radius: 160)
-                .offset(x: -220, y: -260)
+                .fill(accentPrimary.opacity(0.22))
+                .frame(width: 420, height: 420)
+                .blur(radius: 140)
+                .offset(x: -180, y: -200)
             Circle()
-                .fill(accentSecondary.opacity(0.32))
-                .frame(width: 560, height: 560)
-                .blur(radius: 160)
-                .offset(x: 260, y: -60)
-            Circle()
-                .fill(accentPrimary.opacity(0.3))
-                .frame(width: 560, height: 560)
-                .blur(radius: 160)
-                .offset(x: -180, y: 480)
-            Circle()
-                .fill(mostPlayed.opacity(0.26))
-                .frame(width: 520, height: 520)
-                .blur(radius: 160)
-                .offset(x: 260, y: 760)
+                .fill(accentSecondary.opacity(0.16))
+                .frame(width: 380, height: 380)
+                .blur(radius: 140)
+                .offset(x: 220, y: -40)
         }
     }
 
-    /// A thin diagonal iridescent streak -- white catching the light, then a hint of
-    /// pink and cool blue as it fades -- like a prism edge on real glass. Blended
-    /// additively so it brightens rather than muddying whatever's underneath.
+    /// A thin diagonal iridescent streak that continuously sweeps across the surface --
+    /// white catching the light, then a hint of pink and cool blue -- like a prism edge
+    /// on real glass. Driven by `TimelineView` so it's genuinely animated, not a static
+    /// gradient. Blended additively so it brightens rather than muddying what's underneath.
     static func prismSheen<S: Shape>(_ shape: S) -> some View {
-        shape
-            .fill(
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.0),
-                        .init(color: Color.white.opacity(0.0), location: 0.32),
-                        .init(color: Color.white.opacity(0.4), location: 0.44),
-                        .init(color: Color(red: 1.0, green: 0.6, blue: 0.78).opacity(0.32), location: 0.52),
-                        .init(color: Color(red: 0.55, green: 0.7, blue: 1.0).opacity(0.26), location: 0.6),
-                        .init(color: .clear, location: 0.74),
-                        .init(color: .clear, location: 1.0)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+        TimelineView(.animation) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let phase = (sin(t / 1.8) + 1) / 2 // oscillates 0...1
+
+            shape
+                .fill(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: max(0, phase - 0.22)),
+                            .init(color: Color.white.opacity(0.45), location: phase),
+                            .init(color: Color(red: 1.0, green: 0.6, blue: 0.8).opacity(0.34), location: min(1, phase + 0.08)),
+                            .init(color: Color(red: 0.55, green: 0.75, blue: 1.0).opacity(0.26), location: min(1, phase + 0.16)),
+                            .init(color: .clear, location: min(1, phase + 0.34))
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
-            )
-            .blendMode(.plusLighter)
+                .blendMode(.plusLighter)
+        }
     }
 
-    /// The glass fill: material, a soft directional sheen, and a prism streak layered
-    /// together so surfaces catch light like a real glass pane.
+    /// A rotating rainbow-tinted rim, like light catching a glass edge from different
+    /// angles -- also `TimelineView`-driven, so the color genuinely shifts over time
+    /// instead of sitting as one fixed gradient.
+    static func glassStroke<S: Shape>(_ shape: S, lineWidth: CGFloat = 1) -> some View {
+        TimelineView(.animation) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let angle = Angle(degrees: t.truncatingRemainder(dividingBy: 8) / 8 * 360)
+
+            shape.stroke(
+                AngularGradient(
+                    gradient: Gradient(colors: [
+                        Color.white.opacity(0.75),
+                        accentSecondary.opacity(0.65),
+                        Color(red: 0.6, green: 0.75, blue: 1.0).opacity(0.55),
+                        Color.white.opacity(0.18),
+                        Color.white.opacity(0.75)
+                    ]),
+                    center: .center,
+                    angle: angle
+                ),
+                lineWidth: lineWidth
+            )
+        }
+    }
+
+    /// The glass fill: material, a soft directional highlight, and the animated prism
+    /// streak layered together so surfaces catch light like a real glass pane.
     static func glassFill<S: Shape>(_ shape: S) -> some View {
         ZStack {
             shape.fill(.ultraThinMaterial)
             shape.fill(
                 LinearGradient(
-                    colors: [Color.white.opacity(0.16), Color.white.opacity(0.02)],
+                    colors: [Color.white.opacity(0.14), Color.white.opacity(0.02)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -85,21 +103,8 @@ enum Theme {
         }
     }
 
-    /// The glass rim: a gradient stroke, bright where light would catch the top-left edge
-    /// and fading out toward the bottom-right, instead of a flat single-opacity outline.
-    static func glassStroke<S: Shape>(_ shape: S, lineWidth: CGFloat = 1) -> some View {
-        shape.stroke(
-            LinearGradient(
-                colors: [Color.white.opacity(0.55), Color.white.opacity(0.06)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            lineWidth: lineWidth
-        )
-    }
-
     static func glassCard(cornerRadius: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        return glassFill(shape).overlay(glassStroke(shape))
+        return glassFill(shape).overlay(glassStroke(shape, lineWidth: 1.25))
     }
 }

@@ -8,46 +8,51 @@ struct QueueView: View {
     private var upNext: [SiftSong] { Array(playback.queuedSongs.dropFirst()) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().overlay(Color.white.opacity(0.08))
+        ZStack {
+            Theme.background
+            Theme.ambientGlow
 
-            if let nowPlaying {
-                nowPlayingSection(nowPlaying)
+            VStack(spacing: 0) {
+                header
                 Divider().overlay(Color.white.opacity(0.08))
-            }
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if upNext.isEmpty {
-                        Text("Nothing queued after this.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .padding(40)
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Text("UP NEXT")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .tracking(1.2)
-                            .padding(.top, 16)
-                            .padding(.horizontal, 20)
+                if let nowPlaying {
+                    nowPlayingSection(nowPlaying)
+                    Divider().overlay(Color.white.opacity(0.08))
+                }
 
-                        VStack(spacing: 8) {
-                            ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, song in
-                                queueRow(song, queueIndex: offset + 1)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if upNext.isEmpty {
+                            Text("Nothing queued after this.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .padding(40)
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("UP NEXT")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .tracking(1.2)
+                                .padding(.top, 16)
+                                .padding(.horizontal, 20)
+
+                            VStack(spacing: 8) {
+                                ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, song in
+                                    queueRow(song, queueIndex: offset + 1)
+                                }
                             }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 20)
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
                     }
                 }
             }
         }
         .frame(width: 460, height: 560)
-        .background(VisualEffectView(material: .hudWindow))
+        .background(Theme.glassFill(RoundedRectangle(cornerRadius: 20, style: .continuous)))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
+        .overlay(Theme.glassStroke(RoundedRectangle(cornerRadius: 20, style: .continuous), lineWidth: 1.25))
     }
 
     private var header: some View {
@@ -89,6 +94,10 @@ struct QueueView: View {
                 Spacer()
                 Button { Task { await playback.skipToPrevious() } } label: {
                     Image(systemName: "backward.fill")
+                        .frame(width: 40, height: 40)
+                        .background(Theme.glassFill(Circle()))
+                        .overlay(Theme.glassStroke(Circle(), lineWidth: 1))
+                        .clipShape(Circle())
                 }
 
                 Button {
@@ -104,6 +113,10 @@ struct QueueView: View {
 
                 Button { Task { await playback.skipToNext() } } label: {
                     Image(systemName: "forward.fill")
+                        .frame(width: 40, height: 40)
+                        .background(Theme.glassFill(Circle()))
+                        .overlay(Theme.glassStroke(Circle(), lineWidth: 1))
+                        .clipShape(Circle())
                 }
                 .disabled(playback.queuedSongs.count <= 1)
                 Spacer()
@@ -113,6 +126,9 @@ struct QueueView: View {
             .foregroundStyle(.white)
         }
         .padding(20)
+        .background(Theme.glassCard(cornerRadius: 16))
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
 
     private func queueRow(_ song: SiftSong, queueIndex: Int) -> some View {
@@ -133,7 +149,9 @@ struct QueueView: View {
             .buttonStyle(.plain)
         }
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.04)))
+        .background(Theme.glassFill(RoundedRectangle(cornerRadius: 10, style: .continuous)))
+        .overlay(Theme.glassStroke(RoundedRectangle(cornerRadius: 10, style: .continuous), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     @ViewBuilder

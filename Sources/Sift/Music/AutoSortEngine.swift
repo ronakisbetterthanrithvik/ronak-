@@ -8,19 +8,26 @@ import SwiftUI
 @MainActor
 enum AutoSortEngine {
     static func genreGroups(from songs: [SiftSong]) -> [ProposedPlaylist] {
-        groups(from: songs, keyedBy: \.genre, minimumSongs: 1)
+        groups(from: songs, keysFor: { [$0.genre] }, minimumSongs: 1)
     }
 
     static func artistGroups(from songs: [SiftSong], minimumSongs: Int = 3) -> [ProposedPlaylist] {
-        groups(from: songs, keyedBy: \.artist, minimumSongs: minimumSongs)
+        // A song credited to multiple artists ("Playboi Carti & Travis Scott") belongs
+        // under each artist's own group, not lumped into a one-off combined-name group.
+        groups(from: songs, keysFor: { $0.artist.splitArtistCredits() }, minimumSongs: minimumSongs)
     }
 
     private static func groups(
         from songs: [SiftSong],
-        keyedBy key: (SiftSong) -> String,
+        keysFor: (SiftSong) -> [String],
         minimumSongs: Int
     ) -> [ProposedPlaylist] {
-        let grouped = Dictionary(grouping: songs, by: key)
+        var grouped: [String: [SiftSong]] = [:]
+        for song in songs {
+            for key in keysFor(song) {
+                grouped[key, default: []].append(song)
+            }
+        }
 
         return grouped
             .filter { $0.value.count >= minimumSongs }

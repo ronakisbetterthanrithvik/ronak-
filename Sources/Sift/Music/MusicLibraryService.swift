@@ -80,7 +80,12 @@ final class MusicLibraryService {
         }
 
         let genres = Array(Set(songs.map(\.genre))).sorted()
-        let artistCounts = Dictionary(grouping: songs, by: \.artist).mapValues(\.count)
+        var artistCounts: [String: Int] = [:]
+        for song in songs {
+            for artistName in song.artist.splitArtistCredits() {
+                artistCounts[artistName, default: 0] += 1
+            }
+        }
         let topArtists = artistCounts.sorted { $0.value > $1.value }.prefix(4).map(\.key)
         let allArtists = Array(artistCounts.keys).sorted()
         let totalDuration = songs.reduce(0) { $0 + $1.duration }
