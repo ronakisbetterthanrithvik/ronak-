@@ -1,4 +1,5 @@
 import SwiftUI
+import MusicKit
 
 struct PlaylistPickerView: View {
     let playlists: [LibraryPlaylistSummary]
@@ -11,8 +12,8 @@ struct PlaylistPickerView: View {
     @State private var dragTranslation: CGFloat = 0
 
     private enum Cover {
-        case single(URL)
-        case mosaic([URL])
+        case single(Artwork)
+        case mosaic([Artwork])
         // Not "none" -- that would collide with Optional<Cover>.none when switching over
         // `covers[id]` (a Cover?), silently making this case unreachable.
         case unavailable
@@ -168,10 +169,11 @@ struct PlaylistPickerView: View {
     @ViewBuilder
     private func artwork(for playlist: LibraryPlaylistSummary) -> some View {
         switch covers[playlist.id] {
-        case .single(let url):
-            remoteImage(url)
-        case .mosaic(let urls):
-            mosaic(urls)
+        case .single(let artwork):
+            ArtworkImage(artwork, width: 440, height: 440)
+                .scaledToFill()
+        case .mosaic(let artworks):
+            mosaic(artworks)
         case .unavailable:
             artworkPlaceholder
         case nil:
@@ -183,29 +185,19 @@ struct PlaylistPickerView: View {
     private func loadCover(for playlist: LibraryPlaylistSummary) async {
         guard covers[playlist.id] == nil else { return }
         let result = await MusicLibraryService.shared.loadPlaylistCoverArtwork(id: playlist.id)
-        if let single = result.singleURL {
+        if let single = result.single {
             covers[playlist.id] = .single(single)
-        } else if !result.mosaicURLs.isEmpty {
-            covers[playlist.id] = .mosaic(result.mosaicURLs)
+        } else if !result.mosaic.isEmpty {
+            covers[playlist.id] = .mosaic(result.mosaic)
         } else {
             covers[playlist.id] = .unavailable
         }
     }
 
-    private func remoteImage(_ url: URL) -> some View {
-        AsyncImage(url: url) { phase in
-            if let image = phase.image {
-                image.resizable().aspectRatio(contentMode: .fill)
-            } else {
-                artworkPlaceholder
-            }
-        }
-    }
-
     /// Matches how Apple Music itself covers a personal playlist with no custom artwork:
     /// a 2x2 grid of album art sampled from the playlist's own songs.
-    private func mosaic(_ urls: [URL]) -> some View {
-        let tiles: [URL?] = (0..<4).map { $0 < urls.count ? urls[$0] : nil }
+    private func mosaic(_ artworks: [Artwork]) -> some View {
+        let tiles: [Artwork?] = (0..<4).map { $0 < artworks.count ? artworks[$0] : nil }
         return Grid(horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
                 mosaicTile(tiles[0])
@@ -219,16 +211,11 @@ struct PlaylistPickerView: View {
     }
 
     @ViewBuilder
-    private func mosaicTile(_ url: URL?) -> some View {
+    private func mosaicTile(_ artwork: Artwork?) -> some View {
         Group {
-            if let url {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } else {
-                        Theme.accentPrimary.opacity(0.2)
-                    }
-                }
+            if let artwork {
+                ArtworkImage(artwork, width: 220, height: 220)
+                    .scaledToFill()
             } else {
                 Theme.accentGradient
             }

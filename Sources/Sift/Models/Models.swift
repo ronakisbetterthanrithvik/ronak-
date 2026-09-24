@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import MusicKit
 
 struct SiftSong: Identifiable, Hashable {
     let id = UUID()
@@ -11,8 +12,11 @@ struct SiftSong: Identifiable, Hashable {
     let album: String
     let genre: String
     let duration: TimeInterval
-    /// The song's own artwork, sized for a small row thumbnail. Nil for demo data.
-    var artworkURL: URL? = nil
+    /// The song's own artwork. Nil for demo data. Kept as MusicKit's own `Artwork` (not a
+    /// resolved URL) and rendered with MusicKit's `ArtworkImage` view -- a plain
+    /// `AsyncImage(url:)` can't load it, since library-only artwork resolves to a
+    /// `musicKit://artwork/transient/...` reference rather than a real downloadable URL.
+    var artwork: Artwork? = nil
 }
 
 struct SiftPlaylist {
@@ -26,11 +30,12 @@ struct SiftPlaylist {
     let genresPresent: [String]
     let topArtists: [String]
     let allArtists: [String]
-    /// The playlist's real cover art, sized on request. Nil for demo data, or for personal
-    /// playlists without a custom cover set (which is most of them) -- for those, use the
-    /// first few `mosaicArtworkURLs` instead, matching how Apple Music itself covers them.
-    var artworkURL: URL? = nil
-    var mosaicArtworkURLs: [URL] = []
+    /// The playlist's real cover art. Nil for demo data, or for personal playlists without
+    /// a custom cover set (which is most of them) -- for those, use the first few
+    /// `mosaicArtwork` instead, matching how Apple Music itself covers them. See
+    /// `SiftSong.artwork` for why this stays a MusicKit `Artwork` rather than a `URL`.
+    var artwork: Artwork? = nil
+    var mosaicArtwork: [Artwork] = []
 }
 
 enum Weight: String, CaseIterable, Identifiable, Hashable {

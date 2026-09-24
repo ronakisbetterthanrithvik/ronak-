@@ -219,15 +219,10 @@ struct PlaylistDetailView: View {
 
     private var artwork: some View {
         Group {
-            if let url = playlist.artworkURL {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } else {
-                        artworkPlaceholder
-                    }
-                }
-            } else if !playlist.mosaicArtworkURLs.isEmpty {
+            if let artwork = playlist.artwork {
+                ArtworkImage(artwork, width: 240, height: 240)
+                    .scaledToFill()
+            } else if !playlist.mosaicArtwork.isEmpty {
                 artworkMosaic
             } else {
                 artworkPlaceholder
@@ -242,32 +237,27 @@ struct PlaylistDetailView: View {
     /// a 2x2 grid of album art from the playlist's own songs. Pads with the placeholder
     /// tile if fewer than 4 song artworks were actually available.
     private var artworkMosaic: some View {
-        let available = playlist.mosaicArtworkURLs
-        let urls: [URL?] = (0..<4).map { index in index < available.count ? available[index] : nil }
+        let available = playlist.mosaicArtwork
+        let tiles: [Artwork?] = (0..<4).map { index in index < available.count ? available[index] : nil }
         return Grid(horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
-                mosaicTile(urls[0])
-                mosaicTile(urls[1])
+                mosaicTile(tiles[0])
+                mosaicTile(tiles[1])
             }
             GridRow {
-                mosaicTile(urls[2])
-                mosaicTile(urls[3])
+                mosaicTile(tiles[2])
+                mosaicTile(tiles[3])
             }
         }
     }
 
     @ViewBuilder
-    private func mosaicTile(_ url: URL?) -> some View {
-        if let url {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    Theme.accentPrimary.opacity(0.2)
-                }
-            }
-            .frame(width: 60, height: 60)
-            .clipped()
+    private func mosaicTile(_ artwork: Artwork?) -> some View {
+        if let artwork {
+            ArtworkImage(artwork, width: 120, height: 120)
+                .scaledToFill()
+                .frame(width: 60, height: 60)
+                .clipped()
         } else {
             Theme.accentGradient
                 .frame(width: 60, height: 60)
@@ -594,14 +584,9 @@ struct PlaylistDetailView: View {
 
     @ViewBuilder
     private func rowArtwork(for song: SiftSong) -> some View {
-        if let url = song.artworkURL {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    rowArtworkPlaceholder
-                }
-            }
+        if let artwork = song.artwork {
+            ArtworkImage(artwork, width: 160, height: 160)
+                .scaledToFill()
         } else {
             rowArtworkPlaceholder
         }

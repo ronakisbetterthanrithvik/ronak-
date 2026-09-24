@@ -1,4 +1,5 @@
 import SwiftUI
+import MusicKit
 
 struct QueueView: View {
     @ObservedObject var playback: PlaybackService
@@ -161,16 +162,11 @@ struct QueueView: View {
 
     @ViewBuilder
     private func artwork(for song: SiftSong, size: CGFloat) -> some View {
-        if let url = song.artworkURL {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    artworkPlaceholder
-                }
-            }
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        if let artwork = song.artwork {
+            ArtworkImage(artwork, width: 160, height: 160)
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         } else {
             artworkPlaceholder
                 .frame(width: size, height: size)

@@ -8,10 +8,11 @@ struct LibraryPlaylistSummary: Identifiable, Hashable {
 
 /// A playlist's real cover -- its own custom artwork if it has one, or (for a personal
 /// playlist without custom art, which is most of them) up to four of its own tracks'
-/// artwork to build the same 2x2 mosaic Apple Music itself shows for that playlist.
+/// artwork to build the same 2x2 mosaic Apple Music itself shows for that playlist. Kept
+/// as MusicKit's own `Artwork` rather than a resolved `URL` -- see `SiftSong.artwork`.
 struct PlaylistCoverArtwork {
-    let singleURL: URL?
-    let mosaicURLs: [URL]
+    let single: Artwork?
+    let mosaic: [Artwork]
 }
 
 enum MusicLibraryError: LocalizedError {
@@ -64,27 +65,27 @@ final class MusicLibraryService {
             let response = try await request.response()
             guard let basePlaylist = response.items.first else {
                 print("Sift DEBUG: loadPlaylistCoverArtwork — no playlist found for id \(id)")
-                return PlaylistCoverArtwork(singleURL: nil, mosaicURLs: [])
+                return PlaylistCoverArtwork(single: nil, mosaic: [])
             }
 
             let detailed = try await basePlaylist.with(.tracks)
-            if let artworkURL = detailed.artwork?.url(width: 300, height: 300) {
-                return PlaylistCoverArtwork(singleURL: artworkURL, mosaicURLs: [])
+            if let artwork = detailed.artwork {
+                return PlaylistCoverArtwork(single: artwork, mosaic: [])
             }
 
-            var mosaicURLs: [URL] = []
+            var mosaic: [Artwork] = []
             for track in (detailed.tracks ?? []).prefix(20) {
-                guard case let .song(song) = track, let url = song.artwork?.url(width: 200, height: 200) else { continue }
-                mosaicURLs.append(url)
-                if mosaicURLs.count == 4 { break }
+                guard case let .song(song) = track, let artwork = song.artwork else { continue }
+                mosaic.append(artwork)
+                if mosaic.count == 4 { break }
             }
-            if mosaicURLs.isEmpty {
+            if mosaic.isEmpty {
                 print("Sift DEBUG: loadPlaylistCoverArtwork — \(detailed.name) has no artwork and no track artwork to build a mosaic from")
             }
-            return PlaylistCoverArtwork(singleURL: nil, mosaicURLs: mosaicURLs)
+            return PlaylistCoverArtwork(single: nil, mosaic: mosaic)
         } catch {
             print("Sift DEBUG: loadPlaylistCoverArtwork failed for id \(id) — \(error)")
-            return PlaylistCoverArtwork(singleURL: nil, mosaicURLs: [])
+            return PlaylistCoverArtwork(single: nil, mosaic: [])
         }
     }
 
@@ -102,14 +103,11 @@ final class MusicLibraryService {
 
         var songs: [SiftSong] = []
         songs.reserveCapacity(tracks.count)
-        var mosaicURLs: [URL] = []
+        var mosaicArtwork: [Artwork] = []
 
         for track in tracks {
             guard case let .song(song) = track else { continue }
             songCache[song.id.rawValue] = song
-            // Requested well above the ~40pt row size it renders at, so it stays sharp
-            // on Retina displays instead of upscaling a too-small source image.
-            let songArtworkURL = song.artwork?.url(width: 200, height: 200)
             songs.append(
                 SiftSong(
                     libraryID: song.id.rawValue,
@@ -118,11 +116,11 @@ final class MusicLibraryService {
                     album: song.albumTitle ?? "",
                     genre: song.genreNames.first ?? "Unknown",
                     duration: song.duration ?? 0,
-                    artworkURL: songArtworkURL
+                    artwork: song.artwork
                 )
             )
-            if mosaicURLs.count < 4, let url = song.artwork?.url(width: 400, height: 400) {
-                mosaicURLs.append(url)
+            if mosaicArtwork.count < 4, let artwork = song.artwork {
+                mosaicArtwork.append(artwork)
             }
         }
 
@@ -147,8 +145,8 @@ final class MusicLibraryService {
             genresPresent: genres,
             topArtists: Array(topArtists),
             allArtists: allArtists,
-            artworkURL: detailed.artwork?.url(width: 600, height: 600),
-            mosaicArtworkURLs: mosaicURLs
+            artwork: detailed.artwork,
+            mosaicArtwork: mosaicArtwork
         )
     }
 
