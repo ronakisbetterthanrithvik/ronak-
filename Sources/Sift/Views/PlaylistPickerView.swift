@@ -169,7 +169,9 @@ struct PlaylistPickerView: View {
     private func artwork(for playlist: LibraryPlaylistSummary, size: CGFloat) -> some View {
         switch covers[playlist.id] {
         case .single(let artwork):
-            squareArtwork(artwork, size: size)
+            // A playlist's own custom cover can be any photo someone picked, unlike a
+            // song's own artwork -- give it room to not be a perfect square.
+            squareArtwork(artwork, size: size, overscan: 2)
         case .mosaic(let artworks):
             mosaic(artworks, size: size)
         case .unavailable:

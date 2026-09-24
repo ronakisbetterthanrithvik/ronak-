@@ -201,6 +201,13 @@ final class PlaybackService: ObservableObject {
         let musicKitSongs = playable.compactMap { MusicLibraryService.shared.song(for: $0.libraryID) }
         guard !musicKitSongs.isEmpty else { throw PlaybackError.noPlayableSongs }
 
+        // Sift already hands the player a fully-ordered queue -- for `shufflePlay` that
+        // means `SmartControlEngine`'s own shuffled order. MusicKit's native shuffle mode
+        // (if left on from a prior session) re-shuffles on top of whatever queue you give
+        // it while keeping the first entry anchored as the "starting" track, which is
+        // exactly "always starts on the same song, only what's after it is shuffled" --
+        // turning it off here makes sure our own ordering is what actually plays.
+        player.state.shuffleMode = .off
         player.queue = ApplicationMusicPlayer.Queue(for: musicKitSongs)
         try await player.play()
         isPlaying = true
