@@ -383,15 +383,14 @@ struct PlaylistDetailView: View {
     /// A persistent mini transport bar docked to the bottom of the window, the same spot
     /// Apple Music's own player bar sits -- shuffle/back/play/forward on the left, the
     /// now-playing song in the middle (tap it to open the Queue), a Queue button on the
-    /// right, and a thin progress line along the very bottom edge. It's attached via
-    /// `.safeAreaInset` rather than living inside the scrolling content, so it stays put
-    /// while the track list scrolls underneath it.
+    /// right, and a thin progress line underneath. It's attached via `.safeAreaInset`
+    /// rather than living inside the scrolling content, so it stays put while the track
+    /// list scrolls underneath it, but stays a compact floating pill rather than a
+    /// full-width bar.
     @ViewBuilder
     private var nowPlayingBar: some View {
         if let song = nowPlayingSong {
-            VStack(spacing: 0) {
-                Divider().overlay(Color.white.opacity(0.08))
-
+            VStack(spacing: 6) {
                 HStack(spacing: 20) {
                     HStack(spacing: 18) {
                         Button { Task { await shuffleTapped() } } label: {
@@ -447,16 +446,16 @@ struct PlaylistDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.white)
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
 
                 playbackProgressLine(for: song)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, 4)
             }
-            .background(.ultraThinMaterial)
-            .background(Color.black.opacity(0.45))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Capsule().fill(.ultraThinMaterial))
+            .background(Capsule().fill(Color.black.opacity(0.5)))
+            .padding(.horizontal, 40)
+            .padding(.bottom, 16)
         }
     }
 
