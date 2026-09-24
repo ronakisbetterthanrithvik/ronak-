@@ -527,7 +527,7 @@ struct PlaylistDetailView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isNowPlaying ? Theme.accentPrimary.opacity(0.16) : Color.clear)
         )
-        .glassSurface(RoundedRectangle(cornerRadius: 10, style: .continuous), lineWidth: 0.75)
+        .glassEdge(RoundedRectangle(cornerRadius: 10, style: .continuous), lineWidth: 0.75, baseOpacity: isNowPlaying ? 0.4 : 0.22)
     }
 
     @ViewBuilder

@@ -34,17 +34,47 @@ enum Theme {
                 .offset(x: 220, y: -40)
         }
     }
+
+    /// The rainbow rim itself -- only ever drawn as a thin stroke, never a fill, so the
+    /// "refraction" reads as a highlight catching the glass's edge rather than a wash
+    /// over the whole surface. The bright band sits at whichever angle the cursor
+    /// currently is relative to the shape's center, so it visibly sweeps around the
+    /// border as the mouse moves, and settles to a faint fixed highlight at rest.
+    fileprivate static func edgeGradient(hoverLocation: CGPoint?, size: CGSize, baseOpacity: Double) -> AngularGradient {
+        let angle: Angle = {
+            guard let hoverLocation, size.width > 0, size.height > 0 else { return .degrees(135) }
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            return Angle(radians: atan2(hoverLocation.y - center.y, hoverLocation.x - center.x))
+        }()
+        let peak = hoverLocation == nil ? baseOpacity + 0.18 : min(baseOpacity + 0.65, 0.95)
+        let base = hoverLocation == nil ? baseOpacity : baseOpacity * 0.55
+
+        return AngularGradient(
+            gradient: Gradient(stops: [
+                .init(color: Color.white.opacity(base), location: 0.0),
+                .init(color: Color.white.opacity(base), location: 0.36),
+                .init(color: Color.white.opacity(peak), location: 0.5),
+                .init(color: accentSecondary.opacity(peak * 0.85), location: 0.56),
+                .init(color: Color(red: 0.6, green: 0.75, blue: 1.0).opacity(peak * 0.7), location: 0.62),
+                .init(color: Color.white.opacity(base), location: 0.74),
+                .init(color: Color.white.opacity(base), location: 1.0)
+            ]),
+            center: .center,
+            angle: angle
+        )
+    }
 }
 
-/// Cursor-reactive Apple-glass surface: material + a soft prism highlight and rainbow
-/// rim that track the mouse, like light catching a real glass edge as you move over it.
+/// Cursor-reactive Apple-glass surface: translucent `.ultraThinMaterial` (so whatever's
+/// behind -- the dark background, the ambient glow -- still shows through) with a thin
+/// rainbow rim along the edge only. The rim's bright point follows the cursor around the
+/// border while it's hovering, and settles back to a faint, fixed highlight at rest.
 ///
-/// This replaces an earlier version driven by `TimelineView`, which redrew an
-/// `AngularGradient` on every single display frame -- fine for a couple of buttons, but
-/// once the same treatment sat on every row of a 1,000+ song track list, dozens of
-/// on-screen rows were all animating every frame at once and it visibly lagged while
-/// scrolling. Tracking `onContinuousHover` instead means a row only ever recomputes
-/// when the mouse is actually over it, and everything else stays static.
+/// Earlier versions filled the whole shape with an animated/hover-reactive gradient,
+/// which (a) ran on every display frame via `TimelineView` and visibly lagged once it
+/// sat on every row of a long track list, and (b) washed the surface out to a flat gray
+/// instead of reading as glass. Confining all color to the stroke, driven only by
+/// `onContinuousHover`, fixes both.
 private struct GlassSurfaceModifier<S: Shape>: ViewModifier {
     let shape: S
     let lineWidth: CGFloat
@@ -52,58 +82,11 @@ private struct GlassSurfaceModifier<S: Shape>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(
-                GeometryReader { geo in
-                    ZStack {
-                        shape.fill(.ultraThinMaterial)
-                        shape.fill(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.14), Color.white.opacity(0.02)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        if let hoverLocation {
-                            shape
-                                .fill(
-                                    RadialGradient(
-                                        colors: [
-                                            Color.white.opacity(0.55),
-                                            Color(red: 1.0, green: 0.6, blue: 0.8).opacity(0.4),
-                                            Color(red: 0.55, green: 0.75, blue: 1.0).opacity(0.26),
-                                            .clear
-                                        ],
-                                        center: UnitPoint(
-                                            x: geo.size.width > 0 ? hoverLocation.x / geo.size.width : 0.5,
-                                            y: geo.size.height > 0 ? hoverLocation.y / geo.size.height : 0.5
-                                        ),
-                                        startRadius: 0,
-                                        endRadius: max(geo.size.width, geo.size.height) * 0.7
-                                    )
-                                )
-                                .blendMode(.plusLighter)
-                        }
-                    }
-                }
-            )
+            .background(shape.fill(.ultraThinMaterial))
             .overlay(
-                shape.stroke(
-                    AngularGradient(
-                        gradient: Gradient(colors: hoverLocation == nil
-                            ? [
-                                Color.white.opacity(0.3), Theme.accentSecondary.opacity(0.22),
-                                Color.white.opacity(0.12), Color.white.opacity(0.3)
-                            ]
-                            : [
-                                Color.white.opacity(0.9), Theme.accentSecondary.opacity(0.8),
-                                Color(red: 0.6, green: 0.75, blue: 1.0).opacity(0.7),
-                                Color.white.opacity(0.3), Color.white.opacity(0.9)
-                            ]
-                        ),
-                        center: .center
-                    ),
-                    lineWidth: lineWidth
-                )
+                GeometryReader { geo in
+                    shape.stroke(Theme.edgeGradient(hoverLocation: hoverLocation, size: geo.size, baseOpacity: 0.3), lineWidth: lineWidth)
+                }
             )
             .onContinuousHover { phase in
                 switch phase {
@@ -113,14 +96,49 @@ private struct GlassSurfaceModifier<S: Shape>: ViewModifier {
                     hoverLocation = nil
                 }
             }
-            .animation(.easeOut(duration: 0.2), value: hoverLocation == nil)
+            .animation(.easeOut(duration: 0.25), value: hoverLocation == nil)
+    }
+}
+
+/// Same reactive rainbow rim as `glassSurface`, but with no fill of its own -- for rows
+/// inside a container that already provides the translucent material (a track list, a
+/// queue), so the black background shows straight through each row and only the border
+/// catches light.
+private struct GlassEdgeModifier<S: Shape>: ViewModifier {
+    let shape: S
+    let lineWidth: CGFloat
+    let baseOpacity: Double
+    @State private var hoverLocation: CGPoint?
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geo in
+                    shape.stroke(Theme.edgeGradient(hoverLocation: hoverLocation, size: geo.size, baseOpacity: baseOpacity), lineWidth: lineWidth)
+                }
+            )
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location):
+                    hoverLocation = location
+                case .ended:
+                    hoverLocation = nil
+                }
+            }
+            .animation(.easeOut(duration: 0.25), value: hoverLocation == nil)
     }
 }
 
 extension View {
-    /// Applies the cursor-reactive glass surface (material + hover-tracking prism
-    /// highlight + rainbow rim) to any shape -- buttons, cards, list rows, sheet chrome.
+    /// Full glass surface: translucent material fill + a hover-reactive rainbow edge.
+    /// For standalone elements -- buttons, cards, sheet chrome.
     func glassSurface<S: Shape>(_ shape: S, lineWidth: CGFloat = 1) -> some View {
         modifier(GlassSurfaceModifier(shape: shape, lineWidth: lineWidth))
+    }
+
+    /// Edge-only glass: a hover-reactive rainbow rim with no fill of its own. For rows
+    /// that sit inside an already-translucent container.
+    func glassEdge<S: Shape>(_ shape: S, lineWidth: CGFloat = 0.75, baseOpacity: Double = 0.32) -> some View {
+        modifier(GlassEdgeModifier(shape: shape, lineWidth: lineWidth, baseOpacity: baseOpacity))
     }
 }

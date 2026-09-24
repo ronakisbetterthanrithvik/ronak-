@@ -121,7 +121,7 @@ struct QueueView: View {
             .foregroundStyle(.white)
         }
         .padding(20)
-        .glassSurface(RoundedRectangle(cornerRadius: 16, style: .continuous), lineWidth: 1.25)
+        .glassEdge(RoundedRectangle(cornerRadius: 16, style: .continuous), lineWidth: 1, baseOpacity: 0.4)
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
@@ -144,7 +144,7 @@ struct QueueView: View {
             .buttonStyle(.plain)
         }
         .padding(10)
-        .glassSurface(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .glassEdge(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     @ViewBuilder
