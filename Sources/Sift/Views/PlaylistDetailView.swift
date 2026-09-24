@@ -378,39 +378,74 @@ struct PlaylistDetailView: View {
         return playlist.songs.first { $0.libraryID == id }
     }
 
+    /// A persistent mini transport bar for whatever's currently loaded -- shuffle/back/
+    /// play/forward on the left, the now-playing song in the middle (tap it to open the
+    /// Queue), and a dedicated Queue button on the right. Mirrors the layout of Apple
+    /// Music's own mini player bar.
     @ViewBuilder
     private var nowPlayingBar: some View {
         if let song = nowPlayingSong {
-            Button { showQueue = true } label: {
-                HStack(spacing: 10) {
-                    if playback.isPlaying {
-                        EqualizerBars(isPlaying: true)
-                    } else {
-                        Image(systemName: "pause.fill")
-                            .foregroundStyle(Theme.accentSecondary)
+            HStack(spacing: 14) {
+                HStack(spacing: 16) {
+                    Button { Task { await shuffleTapped() } } label: {
+                        Image(systemName: "shuffle")
                     }
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("NOW PLAYING")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .tracking(1.2)
-                        Text("\(song.title) — \(song.artist)")
-                            .font(.system(size: 13, weight: .semibold))
-                            .lineLimit(1)
+                    Button { Task { await playback.skipToPrevious() } } label: {
+                        Image(systemName: "backward.fill")
                     }
-                    Spacer()
+                    Button {
+                        if playback.isPlaying {
+                            playback.pause()
+                        } else {
+                            Task { try? await playback.resume() }
+                        }
+                    } label: {
+                        Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                    Button { Task { await playback.skipToNext() } } label: {
+                        Image(systemName: "forward.fill")
+                    }
+                }
+                .font(.system(size: 13, weight: .semibold))
+
+                Divider().frame(height: 22).overlay(Color.white.opacity(0.15))
+
+                Button { showQueue = true } label: {
+                    HStack(spacing: 10) {
+                        rowArtwork(for: song)
+                            .frame(width: 30, height: 30)
+                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(song.title)
+                                .font(.system(size: 13, weight: .semibold))
+                                .lineLimit(1)
+                            Text(song.artist)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        if playback.isPlaying {
+                            EqualizerBars(isPlaying: true)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+
+                Spacer()
+
+                Button { showQueue = true } label: {
                     Image(systemName: "list.bullet")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.white)
-                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 14)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.accentPrimary.opacity(0.2)))
-            .glassSurface(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.accentPrimary.opacity(0.16)))
+            .glassSurface(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 

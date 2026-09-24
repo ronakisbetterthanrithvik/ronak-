@@ -141,8 +141,12 @@ final class PlaybackService: ObservableObject {
 
         var upNext = Array(queuedSongs.dropFirst())
         guard upNext.indices.contains(sourceOffset) else { return }
-        let moved = upNext[sourceOffset]
-        upNext.move(fromOffsets: source, toOffset: destination)
+        let moved = upNext.remove(at: sourceOffset)
+        // `destination` follows SwiftUI's onMove convention: it's the target index as if
+        // the removal already happened, so shift it back by one when the item moved to a
+        // later position in the (now one-shorter) array.
+        let insertOffset = sourceOffset < destination ? destination - 1 : destination
+        upNext.insert(moved, at: min(max(insertOffset, 0), upNext.count))
         queuedSongs = [queuedSongs[0]] + upNext
 
         guard let entryIndex = player.queue.entries.firstIndex(where: { entry in
