@@ -81,9 +81,17 @@ struct PlaylistDetailView: View {
             CreateSiftPlaylistView(
                 proposal: proposal,
                 onCreate: { name, coverImage in
-                    siftPlaylists.create(name: name, songLibraryIDs: proposal.songLibraryIDs, coverImage: coverImage)
+                    let created = siftPlaylists.create(name: name, songLibraryIDs: proposal.songLibraryIDs, coverImage: coverImage)
                     announce("Created “\(name)” in Sift")
-                    advanceCreationQueue()
+                    if creationQueue.isEmpty {
+                        // Nothing else queued behind this one -- go straight to the new
+                        // playlist's own screen instead of leaving the person back on
+                        // whatever playlist Auto-Sort was run on.
+                        currentCreation = nil
+                        selectSiftPlaylist(created)
+                    } else {
+                        advanceCreationQueue()
+                    }
                 },
                 onSkip: { advanceCreationQueue() }
             )
@@ -540,10 +548,10 @@ struct PlaylistDetailView: View {
                             rowArtwork(for: song, size: 32)
                                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(song.title)
+                                Text(song.displayTitle)
                                     .font(.system(size: 13, weight: .semibold))
                                     .lineLimit(1)
-                                Text(song.artist)
+                                Text(song.displayArtist)
                                     .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -661,7 +669,7 @@ struct PlaylistDetailView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(song.title)
+                    Text(song.displayTitle)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(isNowPlaying ? Theme.accentSecondary : .primary)
                         .lineLimit(1)
@@ -675,7 +683,7 @@ struct PlaylistDetailView: View {
                         }
                     }
                 }
-                Text(song.artist).font(.caption).foregroundStyle(.secondary)
+                Text(song.displayArtist).font(.caption).foregroundStyle(.secondary)
             }
             .frame(width: 280, alignment: .leading)
 

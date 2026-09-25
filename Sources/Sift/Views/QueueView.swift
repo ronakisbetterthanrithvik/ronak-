@@ -112,7 +112,7 @@ struct QueueView: View {
                 .shadow(color: Theme.accentPrimary.opacity(0.35), radius: 16, y: 8)
 
             VStack(spacing: 4) {
-                Text(song.title)
+                Text(song.displayTitle)
                     .font(.system(size: 17, weight: .semibold))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -120,7 +120,7 @@ struct QueueView: View {
                     if playback.isPlaying {
                         EqualizerBars(isPlaying: true)
                     }
-                    Text(song.artist)
+                    Text(song.displayArtist)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -168,8 +168,8 @@ struct QueueView: View {
         HStack(spacing: 12) {
             artwork(for: song, size: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text(song.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                Text(song.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(song.displayTitle).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                Text(song.displayArtist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             Text(song.duration.asClockString).font(.caption).foregroundStyle(.secondary)
@@ -194,8 +194,8 @@ struct QueueView: View {
         HStack(spacing: 12) {
             artwork(for: song, size: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text(song.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                Text(song.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(song.displayTitle).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                Text(song.displayArtist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             Text(song.duration.asClockString).font(.caption).foregroundStyle(.secondary)

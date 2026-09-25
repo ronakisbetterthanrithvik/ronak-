@@ -20,6 +20,42 @@ struct SiftSong: Identifiable, Hashable {
     var artwork: Artwork? = nil
 }
 
+extension SiftSong {
+    /// This song's title with any trailing "(feat. ...)" / "[feat. ...]" credit removed --
+    /// Apple Music's own metadata folds featured artists into the title string itself, but
+    /// visually that credit belongs alongside the artist name underneath (see
+    /// `displayArtist`), not competing with the song name on its own line.
+    var displayTitle: String {
+        title.splittingFeaturedCredit().title
+    }
+
+    /// "A$AP Mob" becomes "A$AP Mob (feat. A$AP Rocky, ...)" when the title carried a
+    /// featured-artist credit -- see `displayTitle`.
+    var displayArtist: String {
+        guard let credit = title.splittingFeaturedCredit().featuredCredit else { return artist }
+        return "\(artist) \(credit)"
+    }
+}
+
+private extension String {
+    /// Splits a trailing featured-artist credit -- "(feat. X, Y)", "[ft. X]",
+    /// "(featuring X)", any capitalization -- off a song title. Returns the title
+    /// unchanged with a nil credit if it has none.
+    func splittingFeaturedCredit() -> (title: String, featuredCredit: String?) {
+        let pattern = #"[\(\[](feat\.?|ft\.?|featuring)\s+(.+?)[\)\]]\s*$"#
+        guard
+            let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+            let match = regex.firstMatch(in: self, range: NSRange(startIndex..., in: self)),
+            let namesRange = Range(match.range(at: 2), in: self),
+            let wholeRange = Range(match.range, in: self)
+        else {
+            return (self, nil)
+        }
+        let strippedTitle = String(self[..<wholeRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+        return (strippedTitle, "(feat. \(self[namesRange]))")
+    }
+}
+
 struct SiftPlaylist {
     /// MusicKit's own `Playlist.id.rawValue` once connected to a real library playlist, nil for demo data.
     var libraryID: String?
