@@ -212,17 +212,21 @@ final class MusicLibraryService {
             let response = try await request.response()
             guard let matched = response.artists.first else {
                 print("Sift DEBUG: lookupArtistArtwork — catalog search for \"\(name)\" returned no artists")
-                artistArtworkCache[name] = nil
+                // `updateValue`, not subscript assignment -- `cache[name] = nil` on a
+                // `[String: Artwork?]` deletes the entry instead of storing a cached
+                // "looked this up, found nothing" result, so every reappearance of this
+                // card (every scroll) would silently retry the same failing request.
+                artistArtworkCache.updateValue(nil, forKey: name)
                 return nil
             }
             if matched.artwork == nil {
                 print("Sift DEBUG: lookupArtistArtwork — matched \"\(matched.name)\" for \"\(name)\" but it has no artwork")
             }
-            artistArtworkCache[name] = matched.artwork
+            artistArtworkCache.updateValue(matched.artwork, forKey: name)
             return matched.artwork
         } catch {
             print("Sift DEBUG: lookupArtistArtwork — search failed for \"\(name)\" — \(error)")
-            artistArtworkCache[name] = nil
+            artistArtworkCache.updateValue(nil, forKey: name)
             return nil
         }
     }
