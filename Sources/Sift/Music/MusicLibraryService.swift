@@ -17,17 +17,11 @@ struct PlaylistCoverArtwork {
 
 enum MusicLibraryError: LocalizedError {
     case playlistNotFound
-    case noSongsToCreatePlaylistFrom
-    case playlistCreationUnsupportedOnMac
 
     var errorDescription: String? {
         switch self {
         case .playlistNotFound:
             return "That playlist couldn't be found in your library anymore."
-        case .noSongsToCreatePlaylistFrom:
-            return "None of those songs were found in your library."
-        case .playlistCreationUnsupportedOnMac:
-            return "Apple's on-device MusicKit doesn't support creating playlists on Mac yet (iOS/iPadOS only) — this is a real Apple platform limitation, not a Sift bug."
         }
     }
 }
@@ -124,6 +118,11 @@ final class MusicLibraryService {
             }
         }
 
+        let unknownGenreCount = songs.filter { $0.genre == "Unknown" }.count
+        if unknownGenreCount > 0 {
+            print("Sift DEBUG: loadPlaylist — \(unknownGenreCount)/\(songs.count) songs in \(detailed.name) had no genreNames from MusicKit")
+        }
+
         let genres = Array(Set(songs.map(\.genre))).sorted()
         var artistCounts: [String: Int] = [:]
         for song in songs {
@@ -150,25 +149,44 @@ final class MusicLibraryService {
         )
     }
 
-    /// Would create a real playlist in the connected Apple Music library.
-    ///
-    /// - Important: `MusicLibrary.createPlaylist(name:description:authorDisplayName:items:)`
-    ///   is explicitly marked unavailable on macOS in MusicKit's current SDK — confirmed
-    ///   directly from Xcode's own compiler error, not assumed. Apple's on-device
-    ///   playlist-creation API is iOS/iPadOS only right now. The PRD's own Technical
-    ///   Architecture section anticipated this gap and named AppleScript automation as
-    ///   the Mac-specific workaround (driving Music.app directly) — that's a real,
-    ///   separate piece of work this doesn't attempt yet, so this throws a clear error
-    ///   instead of silently failing or refusing to compile.
-    func createPlaylist(name: String, songLibraryIDs: [String]) async throws {
-        let songs = songLibraryIDs.compactMap { songCache[$0] }
-        guard !songs.isEmpty else { throw MusicLibraryError.noSongsToCreatePlaylistFrom }
-        throw MusicLibraryError.playlistCreationUnsupportedOnMac
-    }
-
     /// The real MusicKit `Song` behind a library ID, if it's been seen since launch
     /// (populated by `loadPlaylist`). Used by `PlaybackService` to actually play songs.
     func song(for libraryID: String) -> Song? {
         songCache[libraryID]
+    }
+
+    /// Turns library IDs back into playable `SiftSong`s -- for a `SiftOwnedPlaylist`
+    /// (see `SiftPlaylistStore`), whose songs might not all be in `songCache` if it was
+    /// created in an earlier session (the cache is in-memory only, populated by
+    /// `loadPlaylist`, and starts empty on every launch). Looks there first, then fetches
+    /// anything missing directly by id.
+    ///
+    /// - Note: `request.filter(matching:memberOf:)` is my best recollection of how to
+    ///   filter a `MusicLibraryRequest` by a set of ids; if the signature differs in your
+    ///   SDK, Xcode's autocomplete on `request.filter(` will show the current form.
+    func resolveSongs(forLibraryIDs ids: [String]) async -> [SiftSong] {
+        let uncachedIDs = ids.filter { songCache[$0] == nil }
+        if !uncachedIDs.isEmpty {
+            var request = MusicLibraryRequest<Song>()
+            request.filter(matching: \.id, memberOf: uncachedIDs.map { MusicItemID($0) })
+            if let response = try? await request.response() {
+                for song in response.items {
+                    songCache[song.id.rawValue] = song
+                }
+            }
+        }
+
+        return ids.compactMap { id in
+            guard let song = songCache[id] else { return nil }
+            return SiftSong(
+                libraryID: song.id.rawValue,
+                title: song.title,
+                artist: song.artistName,
+                album: song.albumTitle ?? "",
+                genre: song.genreNames.first ?? "Unknown",
+                duration: song.duration ?? 0,
+                artwork: song.artwork
+            )
+        }
     }
 }

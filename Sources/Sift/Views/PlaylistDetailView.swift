@@ -25,7 +25,9 @@ struct PlaylistDetailView: View {
     @State private var showSmartControl = false
     @State private var showAutoSort = false
     @State private var showQueue = false
+    @State private var showSiftPlaylists = false
     @State private var confirmationMessage: String?
+    @StateObject private var siftPlaylists = SiftPlaylistStore.shared
 
     @AppStorage("hasSeenWelcomeDisclaimer") private var hasSeenWelcomeDisclaimer = false
     @State private var showWelcomeDisclaimer = false
@@ -119,6 +121,14 @@ struct PlaylistDetailView: View {
         }
         .sheet(isPresented: $showQueue) {
             QueueView(playback: playback)
+        }
+        .sheet(isPresented: $showSiftPlaylists) {
+            SiftPlaylistsView(store: siftPlaylists) { saved in
+                Task {
+                    await playSiftPlaylist(saved)
+                    showSiftPlaylists = false
+                }
+            }
         }
     }
 
@@ -329,6 +339,16 @@ struct PlaylistDetailView: View {
             }
 
             Spacer()
+
+            Button { showSiftPlaylists = true } label: {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 40, height: 40)
+                    .glassSurface(Circle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .help("My Sift Playlists")
         }
     }
 
@@ -358,16 +378,29 @@ struct PlaylistDetailView: View {
         }
     }
 
+    /// Apple's on-device MusicKit doesn't support creating playlists on Mac (confirmed
+    /// via a real Xcode compiler error — iOS/iPadOS only), so these are saved as
+    /// Sift-only playlists instead: playable from the wand button in this screen's
+    /// action row, just never written into Apple Music itself.
     private func createPlaylists(_ proposals: [ProposedPlaylist]) async {
         guard !isDemoMode else {
             announce("Created \(proposals.count) playlist\(proposals.count == 1 ? "" : "s") (demo — not saved)")
             return
         }
+        for proposal in proposals {
+            siftPlaylists.create(name: proposal.name, songLibraryIDs: proposal.songLibraryIDs)
+        }
+        announce("Created \(proposals.count) playlist\(proposals.count == 1 ? "" : "s") in Sift")
+    }
+
+    private func playSiftPlaylist(_ saved: SiftOwnedPlaylist) async {
+        let songs = await MusicLibraryService.shared.resolveSongs(forLibraryIDs: saved.songLibraryIDs)
+        guard !songs.isEmpty else {
+            announce("None of those songs were found in your library anymore.")
+            return
+        }
         do {
-            for proposal in proposals {
-                try await MusicLibraryService.shared.createPlaylist(name: proposal.name, songLibraryIDs: proposal.songLibraryIDs)
-            }
-            announce("Created \(proposals.count) playlist\(proposals.count == 1 ? "" : "s") in Apple Music")
+            try await playback.playInOrder(songs)
         } catch {
             announce(error.localizedDescription)
         }
