@@ -39,6 +39,10 @@ struct PlaylistDetailView: View {
     @AppStorage("hasSeenWelcomeDisclaimer") private var hasSeenWelcomeDisclaimer = false
     @State private var showWelcomeDisclaimer = false
 
+    /// Plays once at the start of every launch, on top of everything else -- see
+    /// `LaunchSplashView`.
+    @State private var showSplash = true
+
     private var showsAdvancedTools: Bool { playlist.songCount >= 25 }
 
     /// Sift's own local-only playlists (see `SiftOwnedPlaylist`) shown first in the
@@ -49,28 +53,46 @@ struct PlaylistDetailView: View {
     }
 
     var body: some View {
-        Group {
-            switch stage {
-            case .connecting:
-                ConnectView(status: authorizationDisplay, onConnect: connectToAppleMusic, onUseDemoData: useDemoData)
-            case .pickingPlaylist:
-                PlaylistPickerView(
-                    playlists: pickablePlaylists,
-                    isLoading: isLoadingLibrary,
-                    errorMessage: libraryError,
-                    onSelect: { picked in
-                        switch picked {
-                        case .library(let summary): selectPlaylist(summary)
-                        case .sift(let owned): selectSiftPlaylist(owned)
-                        }
-                    },
-                    onRetry: { Task { await loadLibraryPlaylists() } }
-                )
-            case .ready:
-                readyContent
+        ZStack {
+            Group {
+                switch stage {
+                case .connecting:
+                    ConnectView(status: authorizationDisplay, onConnect: connectToAppleMusic, onUseDemoData: useDemoData)
+                case .pickingPlaylist:
+                    PlaylistPickerView(
+                        playlists: pickablePlaylists,
+                        isLoading: isLoadingLibrary,
+                        errorMessage: libraryError,
+                        onSelect: { picked in
+                            switch picked {
+                            case .library(let summary): selectPlaylist(summary)
+                            case .sift(let owned): selectSiftPlaylist(owned)
+                            }
+                        },
+                        onRetry: { Task { await loadLibraryPlaylists() } }
+                    )
+                case .ready:
+                    readyContent
+                }
+            }
+            .frame(minWidth: 900, minHeight: 640)
+
+            if showSplash {
+                // The welcome disclaimer is a real macOS sheet, which presents at the
+                // window level above any in-view z-index -- triggering it only once the
+                // splash is actually done (rather than from `.task` below, which would
+                // fire immediately alongside it) keeps it from popping up on top of the
+                // splash animation still playing underneath.
+                LaunchSplashView {
+                    showSplash = false
+                    if !hasSeenWelcomeDisclaimer {
+                        showWelcomeDisclaimer = true
+                    }
+                }
+                .frame(minWidth: 900, minHeight: 640)
+                .zIndex(10)
             }
         }
-        .frame(minWidth: 900, minHeight: 640)
         .sheet(isPresented: $showWelcomeDisclaimer) {
             WelcomeDisclaimerView {
                 hasSeenWelcomeDisclaimer = true
@@ -97,9 +119,6 @@ struct PlaylistDetailView: View {
             )
         }
         .task {
-            if !hasSeenWelcomeDisclaimer {
-                showWelcomeDisclaimer = true
-            }
             auth.refreshStatus()
             if auth.isAuthorized {
                 await loadLibraryPlaylists()
@@ -343,9 +362,10 @@ struct PlaylistDetailView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else if let artwork = playlist.artwork {
-                // A playlist's own custom cover can be any photo someone picked, unlike
-                // a song's own artwork -- give it room to not be a perfect square.
-                squareArtwork(artwork, size: 120, overscan: 1.5)
+                // A tiny safety margin on top of the precise aspect-aware cover crop
+                // `squareArtwork` already computes -- a playlist's own custom cover can
+                // be any photo someone picked, unlike a song's own artwork.
+                squareArtwork(artwork, size: 120, overscan: 1.05)
             } else if !playlist.mosaicArtwork.isEmpty {
                 artworkMosaic
             } else {
