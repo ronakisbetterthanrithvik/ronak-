@@ -34,7 +34,6 @@ struct SmartControlView: View {
     var body: some View {
         ZStack {
             Theme.background
-            Theme.ambientGlow
 
             VStack(spacing: 0) {
                 header

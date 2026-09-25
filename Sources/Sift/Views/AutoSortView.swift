@@ -26,7 +26,6 @@ struct AutoSortView: View {
     var body: some View {
         ZStack {
             Theme.background
-            Theme.ambientGlow
 
             VStack(spacing: 0) {
                 header
@@ -35,9 +34,27 @@ struct AutoSortView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(mode.subtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Text(mode.subtitle)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+
+                            if !proposals.isEmpty {
+                                Button(selectedCount == proposals.count ? "Deselect All" : "Select All") {
+                                    let makeSelected = selectedCount != proposals.count
+                                    proposalsByMode[mode] = proposals.map {
+                                        var proposal = $0
+                                        proposal.isSelected = makeSelected
+                                        return proposal
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Theme.accentSecondary)
+                            }
+                        }
 
                         if mode == .vibe {
                             vibeControls

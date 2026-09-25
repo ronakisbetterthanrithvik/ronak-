@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import MusicKit
+import AppKit
 
 struct SiftSong: Identifiable, Hashable {
     let id = UUID()
@@ -36,6 +37,10 @@ struct SiftPlaylist {
     /// `SiftSong.artwork` for why this stays a MusicKit `Artwork` rather than a `URL`.
     var artwork: Artwork? = nil
     var mosaicArtwork: [Artwork] = []
+    /// A cover picked locally for a Sift-only playlist (see `SiftOwnedPlaylist`), which
+    /// has no MusicKit `Artwork` of its own to fall back on. Checked before `artwork`/
+    /// `mosaicArtwork` wherever this playlist's cover is displayed.
+    var localArtworkImage: NSImage? = nil
 }
 
 enum Weight: String, CaseIterable, Identifiable, Hashable {

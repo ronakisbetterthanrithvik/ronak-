@@ -2,10 +2,10 @@ import SwiftUI
 import MusicKit
 
 struct PlaylistPickerView: View {
-    let playlists: [LibraryPlaylistSummary]
+    let playlists: [PickablePlaylist]
     let isLoading: Bool
     let errorMessage: String?
-    var onSelect: (LibraryPlaylistSummary) -> Void
+    var onSelect: (PickablePlaylist) -> Void
     var onRetry: () -> Void
 
     @State private var selectedIndex = 0
@@ -19,8 +19,11 @@ struct PlaylistPickerView: View {
         case unavailable
     }
 
-    /// Each playlist's real cover, fetched lazily (via `MusicLibraryService.loadPlaylistCoverArtwork`)
-    /// only for playlists the carousel actually scrolls to, and cached here so none is ever fetched twice.
+    /// Each real library playlist's cover, fetched lazily (via
+    /// `MusicLibraryService.loadPlaylistCoverArtwork`) only for playlists the carousel
+    /// actually scrolls to, and cached here so none is ever fetched twice. Sift-only
+    /// playlists don't need this -- their cover (if any) is already a local file, read
+    /// synchronously via `SiftPlaylistStore.coverImage(for:)`.
     @State private var covers: [String: Cover] = [:]
 
     /// How many tiles show on either side of the selected one before they're clipped off.
@@ -69,7 +72,7 @@ struct PlaylistPickerView: View {
                     carousel
                     arrows
                     Spacer()
-                    Text("Pick which Apple Music library playlist Sift should open.")
+                    Text("Pick a playlist to open -- your Apple Music library, or one Sift created.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .padding(.bottom, 36)
@@ -116,7 +119,7 @@ struct PlaylistPickerView: View {
         }
     }
 
-    private func tile(for playlist: LibraryPlaylistSummary, offset: Int) -> some View {
+    private func tile(for item: PickablePlaylist, offset: Int) -> some View {
         let isSelected = offset == 0
         let distance = abs(offset)
         let size: CGFloat = isSelected ? 220 : (distance == 1 ? 160 : 108)
@@ -124,12 +127,12 @@ struct PlaylistPickerView: View {
         let xOffset = CGFloat(offset) * tileSpacing + dragTranslation
 
         return VStack(spacing: 10) {
-            artwork(for: playlist, size: size)
+            artwork(for: item, size: size)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .shadow(color: .black.opacity(isSelected ? 0.45 : 0), radius: 22, y: 14)
 
             if isSelected {
-                Text(playlist.name)
+                Text(item.name)
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
                     .frame(maxWidth: 240)
@@ -141,8 +144,8 @@ struct PlaylistPickerView: View {
         .onTapGesture {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 if isSelected {
-                    onSelect(playlist)
-                } else if let tappedIndex = playlists.firstIndex(where: { $0.id == playlist.id }) {
+                    onSelect(item)
+                } else if let tappedIndex = playlists.firstIndex(where: { $0.id == item.id }) {
                     selectedIndex = tappedIndex
                 }
             }
@@ -166,32 +169,45 @@ struct PlaylistPickerView: View {
     }
 
     @ViewBuilder
-    private func artwork(for playlist: LibraryPlaylistSummary, size: CGFloat) -> some View {
-        switch covers[playlist.id] {
-        case .single(let artwork):
-            // A playlist's own custom cover can be any photo someone picked, unlike a
-            // song's own artwork -- give it room to not be a perfect square.
-            squareArtwork(artwork, size: size, overscan: 1.5)
-        case .mosaic(let artworks):
-            mosaic(artworks, size: size)
-        case .unavailable:
-            artworkPlaceholder.frame(width: size, height: size)
-        case nil:
-            artworkPlaceholder
-                .frame(width: size, height: size)
-                .task { await loadCover(for: playlist) }
+    private func artwork(for item: PickablePlaylist, size: CGFloat) -> some View {
+        switch item {
+        case .library(let summary):
+            switch covers[summary.id] {
+            case .single(let artwork):
+                // A playlist's own custom cover can be any photo someone picked, unlike
+                // a song's own artwork -- give it room to not be a perfect square.
+                squareArtwork(artwork, size: size, overscan: 1.5)
+            case .mosaic(let artworks):
+                mosaic(artworks, size: size)
+            case .unavailable:
+                artworkPlaceholder.frame(width: size, height: size)
+            case nil:
+                artworkPlaceholder
+                    .frame(width: size, height: size)
+                    .task { await loadCover(for: summary) }
+            }
+        case .sift(let owned):
+            if let nsImage = SiftPlaylistStore.shared.coverImage(for: owned) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipped()
+            } else {
+                artworkPlaceholder.frame(width: size, height: size)
+            }
         }
     }
 
-    private func loadCover(for playlist: LibraryPlaylistSummary) async {
-        guard covers[playlist.id] == nil else { return }
-        let result = await MusicLibraryService.shared.loadPlaylistCoverArtwork(id: playlist.id)
+    private func loadCover(for summary: LibraryPlaylistSummary) async {
+        guard covers[summary.id] == nil else { return }
+        let result = await MusicLibraryService.shared.loadPlaylistCoverArtwork(id: summary.id)
         if let single = result.single {
-            covers[playlist.id] = .single(single)
+            covers[summary.id] = .single(single)
         } else if !result.mosaic.isEmpty {
-            covers[playlist.id] = .mosaic(result.mosaic)
+            covers[summary.id] = .mosaic(result.mosaic)
         } else {
-            covers[playlist.id] = .unavailable
+            covers[summary.id] = .unavailable
         }
     }
 

@@ -1,5 +1,6 @@
 import MusicKit
 import SwiftUI
+import AppKit
 
 private enum Stage {
     case connecting
@@ -29,10 +30,23 @@ struct PlaylistDetailView: View {
     @State private var confirmationMessage: String?
     @StateObject private var siftPlaylists = SiftPlaylistStore.shared
 
+    /// One `CreateSiftPlaylistView` prompt per Auto-Sort proposal the person just
+    /// selected to create -- `currentCreation` drives the sheet, and each Create/Skip
+    /// advances to the next queued proposal (or finishes once the queue is empty).
+    @State private var creationQueue: [ProposedPlaylist] = []
+    @State private var currentCreation: ProposedPlaylist?
+
     @AppStorage("hasSeenWelcomeDisclaimer") private var hasSeenWelcomeDisclaimer = false
     @State private var showWelcomeDisclaimer = false
 
     private var showsAdvancedTools: Bool { playlist.songCount >= 25 }
+
+    /// Sift's own local-only playlists (see `SiftOwnedPlaylist`) shown first in the
+    /// carousel, ahead of real Apple Music library playlists -- freshly created ones
+    /// should be easy to find right after creating them.
+    private var pickablePlaylists: [PickablePlaylist] {
+        siftPlaylists.playlists.map { .sift($0) } + libraryPlaylists.map { .library($0) }
+    }
 
     var body: some View {
         Group {
@@ -41,10 +55,15 @@ struct PlaylistDetailView: View {
                 ConnectView(status: authorizationDisplay, onConnect: connectToAppleMusic, onUseDemoData: useDemoData)
             case .pickingPlaylist:
                 PlaylistPickerView(
-                    playlists: libraryPlaylists,
+                    playlists: pickablePlaylists,
                     isLoading: isLoadingLibrary,
                     errorMessage: libraryError,
-                    onSelect: { selectPlaylist($0) },
+                    onSelect: { picked in
+                        switch picked {
+                        case .library(let summary): selectPlaylist(summary)
+                        case .sift(let owned): selectSiftPlaylist(owned)
+                        }
+                    },
                     onRetry: { Task { await loadLibraryPlaylists() } }
                 )
             case .ready:
@@ -57,6 +76,17 @@ struct PlaylistDetailView: View {
                 hasSeenWelcomeDisclaimer = true
                 showWelcomeDisclaimer = false
             }
+        }
+        .sheet(item: $currentCreation) { proposal in
+            CreateSiftPlaylistView(
+                proposal: proposal,
+                onCreate: { name, coverImage in
+                    siftPlaylists.create(name: name, songLibraryIDs: proposal.songLibraryIDs, coverImage: coverImage)
+                    announce("Created “\(name)” in Sift")
+                    advanceCreationQueue()
+                },
+                onSkip: { advanceCreationQueue() }
+            )
         }
         .task {
             if !hasSeenWelcomeDisclaimer {
@@ -116,8 +146,19 @@ struct PlaylistDetailView: View {
         }
         .sheet(isPresented: $showAutoSort) {
             AutoSortView(playlist: playlist, proposalsByMode: $autoSortProposals) { selected in
-                Task { await createPlaylists(selected) }
+                guard !isDemoMode else {
+                    announce("Created \(selected.count) playlist\(selected.count == 1 ? "" : "s") (demo — not saved)")
+                    return
+                }
+                creationQueue = selected
             }
+        }
+        // Auto-Sort's own sheet has to actually close before the first naming/cover
+        // prompt opens, or SwiftUI ends up trying to present two sheets from this view
+        // at once -- this starts the queue right as that dismiss finishes, rather than
+        // inside AutoSortView's own onCreate callback above.
+        .onChange(of: showAutoSort) { isShowing in
+            if !isShowing { advanceCreationQueue() }
         }
         .sheet(isPresented: $showQueue) {
             QueueView(playback: playback)
@@ -185,6 +226,55 @@ struct PlaylistDetailView: View {
         }
     }
 
+    /// Opens a Sift-only playlist the same way `selectPlaylist` opens a real library
+    /// one -- resolving its songs by id (works across relaunches, not just within the
+    /// session it was created in; see `MusicLibraryService.resolveSongs`) and building
+    /// the same kind of `SiftPlaylist` the rest of this screen already knows how to show.
+    private func selectSiftPlaylist(_ owned: SiftOwnedPlaylist) {
+        Task {
+            isLoadingLibrary = true
+            libraryError = nil
+            let songs = await MusicLibraryService.shared.resolveSongs(forLibraryIDs: owned.songLibraryIDs)
+            guard !songs.isEmpty else {
+                libraryError = "None of those songs were found in your library anymore."
+                isLoadingLibrary = false
+                return
+            }
+
+            var artistCounts: [String: Int] = [:]
+            for song in songs {
+                for artistName in song.artist.splitArtistCredits() {
+                    artistCounts[artistName, default: 0] += 1
+                }
+            }
+            let topArtists = artistCounts.sorted { $0.value > $1.value }.prefix(4).map(\.key)
+
+            let loaded = SiftPlaylist(
+                libraryID: nil,
+                name: owned.name,
+                ownerName: "Sift",
+                songCount: songs.count,
+                totalDuration: songs.reduce(0) { $0 + $1.duration },
+                songs: songs,
+                genresPresent: Array(Set(songs.map(\.genre))).sorted(),
+                topArtists: Array(topArtists),
+                allArtists: Array(artistCounts.keys).sorted(),
+                artwork: nil,
+                mosaicArtwork: Array(songs.compactMap(\.artwork).prefix(4)),
+                localArtworkImage: siftPlaylists.coverImage(for: owned)
+            )
+            playlist = loaded
+            smartControlSettings = SmartControlSettings.default(for: loaded)
+            autoSortProposals = [
+                .genre: AutoSortEngine.genreGroups(from: songs),
+                .artist: AutoSortEngine.artistGroups(from: songs),
+                .vibe: []
+            ]
+            isDemoMode = false
+            stage = .ready
+        }
+    }
+
     private func useDemoData() {
         playlist = .everything
         smartControlSettings = SmartControlSettings.default(for: .everything)
@@ -240,7 +330,11 @@ struct PlaylistDetailView: View {
 
     private var artwork: some View {
         Group {
-            if let artwork = playlist.artwork {
+            if let localImage = playlist.localArtworkImage {
+                Image(nsImage: localImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else if let artwork = playlist.artwork {
                 // A playlist's own custom cover can be any photo someone picked, unlike
                 // a song's own artwork -- give it room to not be a perfect square.
                 squareArtwork(artwork, size: 120, overscan: 1.5)
@@ -379,18 +473,13 @@ struct PlaylistDetailView: View {
     }
 
     /// Apple's on-device MusicKit doesn't support creating playlists on Mac (confirmed
-    /// via a real Xcode compiler error — iOS/iPadOS only), so these are saved as
-    /// Sift-only playlists instead: playable from the wand button in this screen's
-    /// action row, just never written into Apple Music itself.
-    private func createPlaylists(_ proposals: [ProposedPlaylist]) async {
-        guard !isDemoMode else {
-            announce("Created \(proposals.count) playlist\(proposals.count == 1 ? "" : "s") (demo — not saved)")
-            return
-        }
-        for proposal in proposals {
-            siftPlaylists.create(name: proposal.name, songLibraryIDs: proposal.songLibraryIDs)
-        }
-        announce("Created \(proposals.count) playlist\(proposals.count == 1 ? "" : "s") in Sift")
+    /// via a real Xcode compiler error — iOS/iPadOS only), so Auto-Sort proposals are
+    /// saved as Sift-only playlists instead, each named and given a cover via
+    /// `CreateSiftPlaylistView` first -- playable from the wand button in this screen's
+    /// action row and shown right in the "Choose a Playlist" carousel, just never
+    /// written into Apple Music itself.
+    private func advanceCreationQueue() {
+        currentCreation = creationQueue.isEmpty ? nil : creationQueue.removeFirst()
     }
 
     private func playSiftPlaylist(_ saved: SiftOwnedPlaylist) async {

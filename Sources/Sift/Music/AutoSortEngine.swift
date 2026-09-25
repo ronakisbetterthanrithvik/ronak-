@@ -8,13 +8,16 @@ import SwiftUI
 @MainActor
 enum AutoSortEngine {
     static func genreGroups(from songs: [SiftSong]) -> [ProposedPlaylist] {
-        groups(from: songs, keysFor: { [$0.genre] }, minimumSongs: 1)
+        groups(from: songs, keysFor: { [$0.genre] }, minimumSongs: 1, defaultSelected: true)
     }
 
     static func artistGroups(from songs: [SiftSong], minimumSongs: Int = 3) -> [ProposedPlaylist] {
         // A song credited to multiple artists ("Playboi Carti & Travis Scott") belongs
         // under each artist's own group, not lumped into a one-off combined-name group.
-        groups(from: songs, keysFor: { $0.artist.splitArtistCredits() }, minimumSongs: minimumSongs)
+        // A big library can produce dozens of artist groups (every artist with 3+ songs),
+        // so these start unselected -- picking every one by default would silently queue
+        // up creating dozens of playlists at once.
+        groups(from: songs, keysFor: { $0.artist.splitArtistCredits() }, minimumSongs: minimumSongs, defaultSelected: false)
     }
 
     /// Builds a proposal from Claude's curated song selection for the Vibe tab -- the
@@ -33,7 +36,8 @@ enum AutoSortEngine {
     private static func groups(
         from songs: [SiftSong],
         keysFor: (SiftSong) -> [String],
-        minimumSongs: Int
+        minimumSongs: Int,
+        defaultSelected: Bool
     ) -> [ProposedPlaylist] {
         var grouped: [String: [SiftSong]] = [:]
         for song in songs {
@@ -51,7 +55,8 @@ enum AutoSortEngine {
                     duration: songsInGroup.reduce(0) { $0 + $1.duration },
                     previewTracks: Array(songsInGroup.prefix(3).map(\.title)),
                     gradient: gradient(seededBy: name),
-                    songLibraryIDs: songsInGroup.map(\.libraryID)
+                    songLibraryIDs: songsInGroup.map(\.libraryID),
+                    isSelected: defaultSelected
                 )
             }
             .sorted { $0.songCount > $1.songCount }
