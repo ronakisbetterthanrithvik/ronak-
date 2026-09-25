@@ -12,13 +12,7 @@ struct FamiliaritySlider: View {
             let usableWidth = max(proxy.size.width - knobSize, 1)
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [Theme.rarelyPlayed, Color.white.opacity(0.35), Theme.mostPlayed],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(Theme.prismGradient)
                     .frame(height: trackHeight)
 
                 Circle()

@@ -1,14 +1,18 @@
 import SwiftUI
+import MusicKit
 
 struct ProposedPlaylistCard: View {
     @Binding var proposal: ProposedPlaylist
+    /// Auto-Sort's Artist tab -- shows the artist's real Apple Music photo (circular,
+    /// like Apple Music itself) instead of the generic gradient tile Genre/Vibe use.
+    var isArtist: Bool = false
+
+    @State private var artistArtwork: Artwork?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(LinearGradient(colors: proposal.gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 48, height: 48)
+                coverTile
 
                 Spacer()
 
@@ -43,5 +47,26 @@ struct ProposedPlaylistCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(proposal.isSelected ? Theme.accentPrimary.opacity(0.5) : Color.white.opacity(0.08), lineWidth: 1)
         )
+    }
+
+    @ViewBuilder
+    private var coverTile: some View {
+        if isArtist {
+            if let artistArtwork {
+                squareArtwork(artistArtwork, size: 48)
+                    .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(LinearGradient(colors: proposal.gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 48, height: 48)
+                    .task {
+                        artistArtwork = await MusicLibraryService.shared.lookupArtistArtwork(name: proposal.name)
+                    }
+            }
+        } else {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(LinearGradient(colors: proposal.gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 48, height: 48)
+        }
     }
 }

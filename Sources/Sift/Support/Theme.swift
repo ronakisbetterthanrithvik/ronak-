@@ -31,6 +31,20 @@ enum Theme {
         endPoint: .bottomTrailing
     )
 
+    /// The same white/pink/cool-blue prism sequence used for the glass edge refraction
+    /// (see `edgeGradient`), reused anywhere else that wants that "light catching glass"
+    /// identity instead of the plain accent red -- the Familiarity slider's track, say.
+    static let prismGradient = LinearGradient(
+        colors: [
+            Color.white.opacity(0.9),
+            accentSecondary,
+            Color(red: 0.6, green: 0.75, blue: 1.0),
+            Color.white.opacity(0.9)
+        ],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
+
     /// A couple of soft, localized blurred shapes near the header -- just enough for
     /// glass surfaces nearby to have something colorful to refract, without washing the
     /// whole window in color the way a larger/brighter version did.

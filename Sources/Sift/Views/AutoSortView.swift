@@ -71,7 +71,7 @@ struct AutoSortView: View {
                         } else {
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(proposals.indices, id: \.self) { index in
-                                    ProposedPlaylistCard(proposal: bindingForProposal(at: index))
+                                    ProposedPlaylistCard(proposal: bindingForProposal(at: index), isArtist: mode == .artist)
                                 }
                             }
                         }

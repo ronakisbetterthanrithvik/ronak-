@@ -37,6 +37,10 @@ final class MusicLibraryService {
     /// without re-querying the library.
     private var songCache: [String: Song] = [:]
 
+    /// Artist name -> looked-up artwork (or nil if the search found nothing), so
+    /// scrolling Auto-Sort's Artist tab never re-searches the same artist twice.
+    private var artistArtworkCache: [String: Artwork?] = [:]
+
     func fetchPlaylists() async throws -> [LibraryPlaylistSummary] {
         var request = MusicLibraryRequest<Playlist>()
         request.limit = 100
@@ -188,5 +192,24 @@ final class MusicLibraryService {
                 artwork: song.artwork
             )
         }
+    }
+
+    /// An artist's real photo from Apple's catalog, looked up by name -- for Auto-Sort's
+    /// Artist tab, whose proposal cards otherwise fall back to a plain gradient tile.
+    /// This is a catalog search, not a library fetch: MusicKit doesn't expose a library
+    /// song's `artists` relationship without an extra fetch per song, which isn't
+    /// practical across 1,000+ songs, but an artist name search against the public
+    /// catalog is cheap and works for any artist Apple Music actually has.
+    ///
+    /// - Note: `MusicCatalogSearchRequest(term:types:)` is my best recollection of this
+    ///   MusicKit API; if the signature differs in your SDK, Xcode's autocomplete on
+    ///   `MusicCatalogSearchRequest(` will show the current form.
+    func lookupArtistArtwork(name: String) async -> Artwork? {
+        if let cached = artistArtworkCache[name] { return cached }
+        var request = MusicCatalogSearchRequest(term: name, types: [Artist.self])
+        request.limit = 1
+        let artwork = (try? await request.response())?.artists.first?.artwork
+        artistArtworkCache[name] = artwork
+        return artwork
     }
 }
