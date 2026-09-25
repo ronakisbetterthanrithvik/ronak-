@@ -5,6 +5,7 @@ struct QueueView: View {
     @ObservedObject var playback: PlaybackService
     @Environment(\.dismiss) private var dismiss
 
+    private var history: [SiftSong] { playback.playedHistory }
     private var nowPlaying: SiftSong? { playback.queuedSongs.first }
     private var upNext: [SiftSong] { Array(playback.queuedSongs.dropFirst()) }
 
@@ -17,30 +18,40 @@ struct QueueView: View {
                 header
                 Divider().overlay(Color.white.opacity(0.08))
 
-                if let nowPlaying {
-                    nowPlayingSection(nowPlaying)
-                    Divider().overlay(Color.white.opacity(0.08))
-                }
+                // Everything below lives in one List -- History, Now Playing, and Up
+                // Next all scroll together as a single region (rather than Now Playing
+                // sitting in a fixed pane above a separately-scrolling Up Next list),
+                // matching how Apple Music's own Queue view scrolls. It's still a real
+                // List, not a plain ScrollView, so Up Next keeps its animated
+                // drag-to-reorder.
+                List {
+                    if !history.isEmpty {
+                        sectionHeader("HISTORY")
+                        ForEach(history) { song in
+                            historyRow(song)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+                        }
+                    }
 
-                if upNext.isEmpty {
-                    Text("Nothing queued after this.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(40)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    Text("UP NEXT")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .tracking(1.2)
-                        .padding(.top, 16)
-                        .padding(.horizontal, 20)
+                    if let nowPlaying {
+                        nowPlayingSection(nowPlaying)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets())
+                    }
 
-                    // A real List (not a plain ForEach in a ScrollView) so drag-to-reorder
-                    // works with macOS's own animated reordering -- dragging a row here
-                    // slides the others out of the way, then settles the queue in the new
-                    // order once you drop it.
-                    List {
+                    if upNext.isEmpty {
+                        Text("Nothing queued after this.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(40)
+                            .frame(maxWidth: .infinity)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    } else {
+                        sectionHeader("UP NEXT")
                         ForEach(Array(upNext.enumerated()), id: \.element.id) { offset, song in
                             queueRow(song, queueIndex: offset + 1)
                                 .listRowBackground(Color.clear)
@@ -51,14 +62,26 @@ struct QueueView: View {
                             playback.moveQueuedSongs(fromUpNextOffsets: source, toUpNextOffset: destination)
                         }
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
         .frame(width: 460, height: 560)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .glassSurface(RoundedRectangle(cornerRadius: 20, style: .continuous), lineWidth: 1.25)
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(.secondary)
+            .tracking(1.2)
+            .padding(.top, 16)
+            .padding(.horizontal, 20)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets())
     }
 
     private var header: some View {
@@ -139,6 +162,8 @@ struct QueueView: View {
         .padding(.vertical, 12)
     }
 
+    /// Tapping anywhere on the row jumps straight to that song; the remove button is a
+    /// nested tap target, so tapping it removes the song instead of also jumping to it.
     private func queueRow(_ song: SiftSong, queueIndex: Int) -> some View {
         HStack(spacing: 12) {
             artwork(for: song, size: 36)
@@ -157,7 +182,31 @@ struct QueueView: View {
             .buttonStyle(.plain)
         }
         .padding(10)
+        .contentShape(Rectangle())
         .glassEdge(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onTapGesture {
+            Task { await playback.jumpForward(to: song) }
+        }
+    }
+
+    /// A played-past song -- tapping it jumps back to it, replaying everything since.
+    private func historyRow(_ song: SiftSong) -> some View {
+        HStack(spacing: 12) {
+            artwork(for: song, size: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(song.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                Text(song.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+            Text(song.duration.asClockString).font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .opacity(0.55)
+        .contentShape(Rectangle())
+        .glassEdge(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onTapGesture {
+            Task { await playback.jumpBackward(to: song) }
+        }
     }
 
     @ViewBuilder

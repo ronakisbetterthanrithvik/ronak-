@@ -44,8 +44,9 @@ final class PlaybackService: ObservableObject {
     /// method below, so the UI never has to query MusicKit's queue directly.
     @Published private(set) var queuedSongs: [SiftSong] = []
 
-    /// Songs skipped past, most recent last, so `skipToPrevious()` has something to go back to.
-    private var playedHistory: [SiftSong] = []
+    /// Songs skipped past, oldest first, so `skipToPrevious()` has something to go back
+    /// to and the Queue sheet can show them as "History" (also exposed so it can).
+    @Published private(set) var playedHistory: [SiftSong] = []
 
     private var trackStartedAt: Date?
 
@@ -95,6 +96,28 @@ final class PlaybackService: ObservableObject {
             beginTrackingCurrentEntry(knownLibraryID: previous.libraryID)
         } catch {
             print("Sift: skip back failed — \(error)")
+        }
+    }
+
+    /// Jumps straight to a song further down the queue -- tapping any "up next" row in
+    /// the Queue sheet, rather than picking through Skip Forward one song at a time.
+    /// Everything skipped past along the way lands in `playedHistory` exactly as if
+    /// Skip Forward had been tapped that many times in a row, since that's really all
+    /// this is: `skipToNext()` repeated.
+    func jumpForward(to song: SiftSong) async {
+        guard let targetIndex = queuedSongs.firstIndex(where: { $0.libraryID == song.libraryID }), targetIndex > 0 else { return }
+        for _ in 0..<targetIndex {
+            await skipToNext()
+        }
+    }
+
+    /// The inverse of `jumpForward(to:)` -- jumps back to a specific song in
+    /// `playedHistory`, replaying everything back to it in one go via `skipToPrevious()`.
+    func jumpBackward(to song: SiftSong) async {
+        guard let targetIndex = playedHistory.firstIndex(where: { $0.libraryID == song.libraryID }) else { return }
+        let stepsBack = playedHistory.count - targetIndex
+        for _ in 0..<stepsBack {
+            await skipToPrevious()
         }
     }
 
