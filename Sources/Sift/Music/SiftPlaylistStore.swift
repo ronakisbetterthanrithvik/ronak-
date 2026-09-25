@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// A playlist that exists only inside Sift, never in Apple Music itself.
 ///
