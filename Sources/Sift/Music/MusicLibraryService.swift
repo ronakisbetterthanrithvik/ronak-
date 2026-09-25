@@ -208,8 +208,22 @@ final class MusicLibraryService {
         if let cached = artistArtworkCache[name] { return cached }
         var request = MusicCatalogSearchRequest(term: name, types: [Artist.self])
         request.limit = 1
-        let artwork = (try? await request.response())?.artists.first?.artwork
-        artistArtworkCache[name] = artwork
-        return artwork
+        do {
+            let response = try await request.response()
+            guard let matched = response.artists.first else {
+                print("Sift DEBUG: lookupArtistArtwork — catalog search for \"\(name)\" returned no artists")
+                artistArtworkCache[name] = nil
+                return nil
+            }
+            if matched.artwork == nil {
+                print("Sift DEBUG: lookupArtistArtwork — matched \"\(matched.name)\" for \"\(name)\" but it has no artwork")
+            }
+            artistArtworkCache[name] = matched.artwork
+            return matched.artwork
+        } catch {
+            print("Sift DEBUG: lookupArtistArtwork — search failed for \"\(name)\" — \(error)")
+            artistArtworkCache[name] = nil
+            return nil
+        }
     }
 }
