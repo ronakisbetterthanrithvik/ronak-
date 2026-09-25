@@ -32,27 +32,31 @@ struct SmartControlView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().overlay(Color.white.opacity(0.08))
+        ZStack {
+            Theme.background
+            Theme.ambientGlow
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    familiaritySection
-                    signalsSection
-                    genresSection
-                    artistsSection
+            VStack(spacing: 0) {
+                header
+                Divider().overlay(Color.white.opacity(0.08))
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 28) {
+                        familiaritySection
+                        signalsSection
+                        genresSection
+                        artistsSection
+                    }
+                    .padding(24)
                 }
-                .padding(24)
-            }
 
-            Divider().overlay(Color.white.opacity(0.08))
-            footer
+                Divider().overlay(Color.white.opacity(0.08))
+                footer
+            }
         }
         .frame(width: 640, height: 620)
-        .background(VisualEffectView(material: .hudWindow))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
+        .glassSurface(RoundedRectangle(cornerRadius: 20, style: .continuous), lineWidth: 1.25)
     }
 
     private var header: some View {

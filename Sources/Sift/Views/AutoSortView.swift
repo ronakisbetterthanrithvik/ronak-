@@ -24,47 +24,51 @@ struct AutoSortView: View {
     private var selectedCount: Int { proposals.filter { $0.isSelected }.count }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().overlay(Color.white.opacity(0.08))
-            tabBar
+        ZStack {
+            Theme.background
+            Theme.ambientGlow
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(mode.subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+            VStack(spacing: 0) {
+                header
+                Divider().overlay(Color.white.opacity(0.08))
+                tabBar
 
-                    if mode == .vibe {
-                        vibeControls
-                    }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(mode.subtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
 
-                    if proposals.isEmpty {
-                        if mode != .vibe {
-                            Text("Nothing to propose yet.")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 24)
+                        if mode == .vibe {
+                            vibeControls
                         }
-                    } else {
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            ForEach(proposals.indices, id: \.self) { index in
-                                ProposedPlaylistCard(proposal: bindingForProposal(at: index))
+
+                        if proposals.isEmpty {
+                            if mode != .vibe {
+                                Text("Nothing to propose yet.")
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 24)
+                            }
+                        } else {
+                            LazyVGrid(columns: columns, spacing: 16) {
+                                ForEach(proposals.indices, id: \.self) { index in
+                                    ProposedPlaylistCard(proposal: bindingForProposal(at: index))
+                                }
                             }
                         }
                     }
+                    .padding(24)
                 }
-                .padding(24)
-            }
 
-            Divider().overlay(Color.white.opacity(0.08))
-            footer
+                Divider().overlay(Color.white.opacity(0.08))
+                footer
+            }
         }
         .frame(width: 760, height: 640)
-        .background(VisualEffectView(material: .hudWindow))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
+        .glassSurface(RoundedRectangle(cornerRadius: 20, style: .continuous), lineWidth: 1.25)
     }
 
     // MARK: - Vibe
@@ -76,11 +80,17 @@ struct AutoSortView: View {
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 ZStack(alignment: .topLeading) {
+                    // TextEditor carries its own small built-in inset on top of whatever
+                    // padding is set here (there's no public way to zero it out), so this
+                    // is shaved down from the placeholder's padding below to land the
+                    // cursor roughly where the placeholder text starts -- nudge these two
+                    // padding values together if it's still off after rebuilding.
                     TextEditor(text: $vibeRequestText)
                         .font(.callout)
                         .scrollContentBackground(.hidden)
                         .frame(height: 90)
-                        .padding(8)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 12)
 
                     if vibeRequestText.isEmpty {
                         Text("e.g. \"Give me a playlist with only NBA YoungBoy and Lil Uzi Vert, plus some other hype songs from this playlist\"")
