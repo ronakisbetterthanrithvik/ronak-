@@ -173,10 +173,6 @@ struct AutoSortView: View {
     /// rather than silently firing hundreds of catalog searches on every playlist open.
     private var genreEmptyState: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Apple Music didn't provide genre data for these songs from your library, so Genre sorting isn't available yet.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
             if let catalogGenreError {
                 Text(catalogGenreError)
                     .font(.caption)
@@ -190,7 +186,7 @@ struct AutoSortView: View {
                     if isFetchingCatalogGenres {
                         ProgressView().controlSize(.small).tint(.white)
                     }
-                    Text(isFetchingCatalogGenres ? "Looking up genres…" : "Look Up Genres from Apple Music")
+                    Text(isFetchingCatalogGenres ? "Looking up genres…" : "Categorize by Genre")
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .padding(.horizontal, 18)
@@ -200,6 +196,10 @@ struct AutoSortView: View {
             }
             .buttonStyle(.plain)
             .disabled(isFetchingCatalogGenres)
+
+            Text("This may take up to a few minutes")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 24)
