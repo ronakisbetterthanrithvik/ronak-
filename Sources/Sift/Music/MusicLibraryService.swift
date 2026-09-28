@@ -293,13 +293,33 @@ final class MusicLibraryService {
         return result
     }
 
+    /// Retries a catalog request up to `attempts` times with a short delay between each
+    /// -- confirmed via debug logging: firing many `MusicCatalogSearchRequest`s at once
+    /// (one per visible Auto-Sort card, or one per song in a large playlist's genre
+    /// lookup) intermittently comes back as a corrupted/empty JSON body
+    /// (`DecodingError.dataCorrupted` / "Unexpected end of file") rather than a clean
+    /// error -- a transient rate-limit-style hiccup under load, not a real "this doesn't
+    /// exist" result, so it's worth a couple of retries before giving up on it.
+    private func withRetries<T>(attempts: Int = 3, _ operation: () async throws -> T) async throws -> T {
+        var lastError: Error = MusicLibraryError.playlistNotFound
+        for attempt in 0..<attempts {
+            do {
+                return try await operation()
+            } catch {
+                lastError = error
+                if attempt < attempts - 1 {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                }
+            }
+        }
+        throw lastError
+    }
+
     /// A library song's catalog counterpart's genre, found by searching the catalog for
     /// its own title + artist -- for when `Song.genreName` comes up empty even after the
     /// `.with(.genres)` fetch, i.e. Apple Music's library APIs genuinely have no genre
     /// data for that song (only its catalog counterpart does). This is the same catalog
-    /// search endpoint `lookupArtistArtwork` already uses; if this app is hitting the
-    /// `.developerTokenRequestFailed` issue that's affected artist photos, this will
-    /// fail the same way for the same reason.
+    /// search endpoint `lookupArtistArtwork` already uses.
     ///
     /// - Note: `MusicCatalogSearchRequest(term:types:)` returning a response with a
     ///   `.songs` collection is my best recollection of this MusicKit API; if it differs
@@ -307,10 +327,12 @@ final class MusicLibraryService {
     func lookupCatalogGenre(title: String, artist: String) async -> String? {
         let key = "\(title)|\(artist)"
         if let cached = catalogGenreCache[key] { return cached }
-        var request = MusicCatalogSearchRequest(term: "\(title) \(artist)", types: [Song.self])
-        request.limit = 1
         do {
-            let response = try await request.response()
+            let response = try await withRetries {
+                var request = MusicCatalogSearchRequest(term: "\(title) \(artist)", types: [Song.self])
+                request.limit = 1
+                return try await request.response()
+            }
             let genre = response.songs.first?.genreNames.first
             // `updateValue`, not subscript assignment -- see the same note on
             // `artistArtworkCache` above; a `cache[key] = nil` here would delete the
@@ -353,10 +375,12 @@ final class MusicLibraryService {
     ///   `MusicCatalogSearchRequest(` will show the current form.
     func lookupArtistArtwork(name: String) async -> Artwork? {
         if let cached = artistArtworkCache[name] { return cached }
-        var request = MusicCatalogSearchRequest(term: name, types: [Artist.self])
-        request.limit = 1
         do {
-            let response = try await request.response()
+            let response = try await withRetries {
+                var request = MusicCatalogSearchRequest(term: name, types: [Artist.self])
+                request.limit = 1
+                return try await request.response()
+            }
             guard let matched = response.artists.first else {
                 print("Sift DEBUG: lookupArtistArtwork — catalog search for \"\(name)\" returned no artists")
                 // `updateValue`, not subscript assignment -- `cache[name] = nil` on a
