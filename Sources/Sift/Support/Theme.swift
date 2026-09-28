@@ -21,9 +21,10 @@ enum Theme {
     static let accentPrimary = Color(red: 0.85, green: 0.06, blue: 0.20)
     static let accentSecondary = Color(red: 1.00, green: 0.28, blue: 0.42)
     static let rarelyPlayed = Color(red: 1.00, green: 0.55, blue: 0.60)
-    // A brighter, warmer red -- the previous shade (0.65, 0.03, 0.14) read as a muddy,
-    // near-black maroon rather than a clear "most played" red.
-    static let mostPlayed = Color(red: 1.00, green: 0.30, blue: 0.16)
+    // An icy blue/white, matching the cool end of `prismGradient`'s glass refraction --
+    // deliberately the opposite temperature from `rarelyPlayed`'s warm red/pink, rather
+    // than the orange-red this used to be.
+    static let mostPlayed = Color(red: 0.65, green: 0.82, blue: 1.0)
 
     static let accentGradient = LinearGradient(
         colors: [accentSecondary, accentPrimary],

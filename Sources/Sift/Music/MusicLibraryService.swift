@@ -99,12 +99,25 @@ final class MusicLibraryService {
         let detailed = try await basePlaylist.with(.tracks)
         let tracks = detailed.tracks ?? []
 
+        // A playlist's own `.tracks` relationship hands back a lighter `Song` than a
+        // direct library fetch does -- in practice its `genreNames` consistently comes
+        // back empty even for songs that show a real genre in Music.app itself, which is
+        // why every song was falling back to "Unknown" here. Re-fetching the same songs
+        // directly by id (the same technique `resolveSongs` already used) gets the
+        // fuller data MusicKit only actually attaches to a top-level `Song` fetch.
+        let trackSongsByID: [String: Song] = tracks.reduce(into: [:]) { result, track in
+            guard case let .song(song) = track else { return }
+            result[song.id.rawValue] = song
+        }
+        let fullSongsByID = await fetchFullSongs(forLibraryIDs: Array(trackSongsByID.keys))
+
         var songs: [SiftSong] = []
         songs.reserveCapacity(tracks.count)
         var mosaicArtwork: [Artwork] = []
 
         for track in tracks {
-            guard case let .song(song) = track else { continue }
+            guard case let .song(trackSong) = track else { continue }
+            let song = fullSongsByID[trackSong.id.rawValue] ?? trackSong
             songCache[song.id.rawValue] = song
             songs.append(
                 SiftSong(
@@ -124,7 +137,7 @@ final class MusicLibraryService {
 
         let unknownGenreCount = songs.filter { $0.genre == "Unknown" }.count
         if unknownGenreCount > 0 {
-            print("Sift DEBUG: loadPlaylist — \(unknownGenreCount)/\(songs.count) songs in \(detailed.name) had no genreNames from MusicKit")
+            print("Sift DEBUG: loadPlaylist — \(unknownGenreCount)/\(songs.count) songs in \(detailed.name) had no genreNames from MusicKit even after a direct fetch")
         }
 
         let genres = Array(Set(songs.map(\.genre))).sorted()
@@ -171,12 +184,9 @@ final class MusicLibraryService {
     func resolveSongs(forLibraryIDs ids: [String]) async -> [SiftSong] {
         let uncachedIDs = ids.filter { songCache[$0] == nil }
         if !uncachedIDs.isEmpty {
-            var request = MusicLibraryRequest<Song>()
-            request.filter(matching: \.id, memberOf: uncachedIDs.map { MusicItemID($0) })
-            if let response = try? await request.response() {
-                for song in response.items {
-                    songCache[song.id.rawValue] = song
-                }
+            let fetched = await fetchFullSongs(forLibraryIDs: uncachedIDs)
+            for (id, song) in fetched {
+                songCache[id] = song
             }
         }
 
@@ -192,6 +202,38 @@ final class MusicLibraryService {
                 artwork: song.artwork
             )
         }
+    }
+
+    /// A direct top-level fetch of `Song`s by library id -- unlike a `Song` reached via
+    /// a playlist's `.tracks` relationship, this reliably has `genreNames` populated.
+    /// Chunked because a single `.filter(matching:memberOf:)` call carrying 1,000+ ids
+    /// (an entire large playlist) risks hitting a request-size limit; each chunk runs
+    /// concurrently and a chunk that fails just leaves those ids out of the result
+    /// rather than failing the whole fetch.
+    private func fetchFullSongs(forLibraryIDs ids: [String]) async -> [String: Song] {
+        guard !ids.isEmpty else { return [:] }
+        let chunkSize = 100
+        let chunks = stride(from: 0, to: ids.count, by: chunkSize).map {
+            Array(ids[$0..<min($0 + chunkSize, ids.count)])
+        }
+
+        var result: [String: Song] = [:]
+        await withTaskGroup(of: [Song].self) { group in
+            for chunk in chunks {
+                group.addTask {
+                    var request = MusicLibraryRequest<Song>()
+                    request.filter(matching: \.id, memberOf: chunk.map { MusicItemID($0) })
+                    guard let response = try? await request.response() else { return [] }
+                    return Array(response.items)
+                }
+            }
+            for await songs in group {
+                for song in songs {
+                    result[song.id.rawValue] = song
+                }
+            }
+        }
+        return result
     }
 
     /// An artist's real photo from Apple's catalog, looked up by name -- for Auto-Sort's
