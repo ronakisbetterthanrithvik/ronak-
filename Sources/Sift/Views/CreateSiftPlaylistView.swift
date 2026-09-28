@@ -18,9 +18,6 @@ struct CreateSiftPlaylistView: View {
 
     @State private var name: String
     @State private var coverImage: NSImage?
-    /// The just-picked photo, still awaiting a crop confirm/cancel -- separate from
-    /// `coverImage` so a cancelled crop leaves whatever cover was already set untouched.
-    @State private var pendingCropImage: NSImage?
 
     init(proposal: ProposedPlaylist, onCreate: @escaping (String, NSImage?) -> Void, onSkip: @escaping () -> Void) {
         self.proposal = proposal
@@ -96,21 +93,6 @@ struct CreateSiftPlaylistView: View {
         .frame(width: 420, height: 480)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .glassSurface(RoundedRectangle(cornerRadius: 20, style: .continuous), lineWidth: 1.25)
-        .sheet(isPresented: Binding(
-            get: { pendingCropImage != nil },
-            set: { isPresented in if !isPresented { pendingCropImage = nil } }
-        )) {
-            if let pendingCropImage {
-                ImageCropPickerView(
-                    image: pendingCropImage,
-                    onConfirm: { cropped in
-                        coverImage = cropped
-                        self.pendingCropImage = nil
-                    },
-                    onCancel: { self.pendingCropImage = nil }
-                )
-            }
-        }
     }
 
     private var coverPicker: some View {
@@ -147,6 +129,6 @@ struct CreateSiftPlaylistView: View {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         guard panel.runModal() == .OK, let url = panel.url, let image = NSImage(contentsOf: url) else { return }
-        pendingCropImage = image
+        coverImage = image
     }
 }
