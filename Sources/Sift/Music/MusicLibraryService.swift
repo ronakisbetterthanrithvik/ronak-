@@ -62,6 +62,36 @@ final class MusicLibraryService {
     /// so re-opening the same playlist's Genre tab never re-searches the same song twice.
     private var catalogGenreCache: [String: String?] = [:]
 
+    /// How many catalog search requests (`withRetries`) are allowed to actually be in
+    /// flight at once, app-wide -- see `acquireCatalogSlot`/`releaseCatalogSlot`.
+    private var catalogRequestSlots = 4
+    private var catalogRequestWaiters: [CheckedContinuation<Void, Never>] = []
+
+    /// A simple async semaphore bounding how many catalog searches run concurrently,
+    /// no matter how many independent callers ask for one at once. Auto-Sort's Artist
+    /// tab fires one of these per visible card the moment SwiftUI renders it, with no
+    /// coordination between cards -- retrying a failed request alone (`withRetries`)
+    /// wasn't enough, since every retry was still landing in the same overloaded burst
+    /// as everyone else's. Actually limiting how many run at once fixes that at the
+    /// source instead.
+    private func acquireCatalogSlot() async {
+        if catalogRequestSlots > 0 {
+            catalogRequestSlots -= 1
+            return
+        }
+        await withCheckedContinuation { continuation in
+            catalogRequestWaiters.append(continuation)
+        }
+    }
+
+    private func releaseCatalogSlot() {
+        if !catalogRequestWaiters.isEmpty {
+            catalogRequestWaiters.removeFirst().resume()
+        } else {
+            catalogRequestSlots += 1
+        }
+    }
+
     func fetchPlaylists() async throws -> [LibraryPlaylistSummary] {
         var request = MusicLibraryRequest<Playlist>()
         request.limit = 100
@@ -303,6 +333,8 @@ final class MusicLibraryService {
     private func withRetries<T>(attempts: Int = 3, _ operation: () async throws -> T) async throws -> T {
         var lastError: Error = MusicLibraryError.playlistNotFound
         for attempt in 0..<attempts {
+            await acquireCatalogSlot()
+            defer { releaseCatalogSlot() }
             do {
                 return try await operation()
             } catch {
