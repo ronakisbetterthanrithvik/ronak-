@@ -362,10 +362,9 @@ struct PlaylistDetailView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else if let artwork = playlist.artwork {
-                // A tiny safety margin on top of the precise aspect-aware cover crop
-                // `squareArtwork` already computes -- a playlist's own custom cover can
-                // be any photo someone picked, unlike a song's own artwork.
-                squareArtwork(artwork, size: 120, overscan: 1.05)
+                // A playlist's own custom cover can be any photo someone picked, unlike
+                // a song's own artwork -- give it room to not be a perfect square.
+                squareArtwork(artwork, size: 120, overscan: 1.5)
             } else if !playlist.mosaicArtwork.isEmpty {
                 artworkMosaic
             } else {
