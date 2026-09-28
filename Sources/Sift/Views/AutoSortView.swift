@@ -14,6 +14,9 @@ struct AutoSortView: View {
     @State private var isGeneratingVibe = false
     @State private var vibeError: String?
 
+    @State private var isFetchingCatalogGenres = false
+    @State private var catalogGenreError: String?
+
     private let columns = [
         GridItem(.flexible(), spacing: 16),
         GridItem(.flexible(), spacing: 16),
@@ -62,11 +65,7 @@ struct AutoSortView: View {
 
                         if proposals.isEmpty {
                             if mode == .genre {
-                                Text("Apple Music didn't provide genre data for these songs, so Genre sorting isn't available for this playlist. Try Vibe or Artist instead.")
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.vertical, 24)
+                                genreEmptyState
                             } else if mode != .vibe {
                                 Text("Nothing to propose yet.")
                                     .font(.callout)
@@ -163,6 +162,77 @@ struct AutoSortView: View {
                     .disabled(isGeneratingVibe || vibeRequestText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+        }
+    }
+
+    // MARK: - Genre
+
+    /// Shown in place of proposal cards when the library itself has no genre data for
+    /// any song in this playlist (see `Song.genreName` in `MusicLibraryService`) --
+    /// offers to look each song's genre up from Apple Music's public catalog instead,
+    /// rather than silently firing hundreds of catalog searches on every playlist open.
+    private var genreEmptyState: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Apple Music didn't provide genre data for these songs from your library, so Genre sorting isn't available yet.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            if let catalogGenreError {
+                Text(catalogGenreError)
+                    .font(.caption)
+                    .foregroundStyle(Theme.accentSecondary)
+            }
+
+            Button {
+                fetchCatalogGenres()
+            } label: {
+                HStack(spacing: 6) {
+                    if isFetchingCatalogGenres {
+                        ProgressView().controlSize(.small).tint(.white)
+                    }
+                    Text(isFetchingCatalogGenres ? "Looking up genres…" : "Look Up Genres from Apple Music")
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(Theme.accentGradient))
+                .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .disabled(isFetchingCatalogGenres)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 24)
+    }
+
+    /// Searches Apple Music's catalog for each song's own title + artist and re-groups
+    /// by whatever genre that search finds -- a slower, best-effort fallback for when
+    /// the library has no genre data at all, not something run automatically on every
+    /// playlist load.
+    private func fetchCatalogGenres() {
+        isFetchingCatalogGenres = true
+        catalogGenreError = nil
+        Task {
+            let genresByID = await MusicLibraryService.shared.catalogGenres(for: playlist.songs)
+            let updatedSongs = playlist.songs.map { song -> SiftSong in
+                guard let genre = genresByID[song.libraryID] else { return song }
+                return SiftSong(
+                    libraryID: song.libraryID,
+                    title: song.title,
+                    artist: song.artist,
+                    album: song.album,
+                    genre: genre,
+                    duration: song.duration,
+                    artwork: song.artwork
+                )
+            }
+            let groups = AutoSortEngine.genreGroups(from: updatedSongs)
+            if groups.isEmpty {
+                catalogGenreError = "Apple Music's catalog didn't return genre data for these songs either."
+            } else {
+                proposalsByMode[.genre] = groups
+            }
+            isFetchingCatalogGenres = false
         }
     }
 

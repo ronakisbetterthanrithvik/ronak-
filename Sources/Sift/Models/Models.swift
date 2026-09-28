@@ -3,7 +3,7 @@ import SwiftUI
 import MusicKit
 import AppKit
 
-struct SiftSong: Identifiable, Hashable {
+struct SiftSong: Identifiable, Hashable, Sendable {
     let id = UUID()
     /// Stable across app launches: MusicKit's own `Song.id.rawValue` for library songs,
     /// or a deterministic placeholder for demo data. Used as the listening-history key.

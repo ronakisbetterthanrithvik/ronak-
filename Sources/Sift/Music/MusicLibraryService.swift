@@ -58,6 +58,10 @@ final class MusicLibraryService {
     /// scrolling Auto-Sort's Artist tab never re-searches the same artist twice.
     private var artistArtworkCache: [String: Artwork?] = [:]
 
+    /// "title|artist" -> looked-up catalog genre (or nil if the search found nothing),
+    /// so re-opening the same playlist's Genre tab never re-searches the same song twice.
+    private var catalogGenreCache: [String: String?] = [:]
+
     func fetchPlaylists() async throws -> [LibraryPlaylistSummary] {
         var request = MusicLibraryRequest<Playlist>()
         request.limit = 100
@@ -269,14 +273,14 @@ final class MusicLibraryService {
     /// Runs `transform` over `items` with at most `maxConcurrent` in flight at once,
     /// rather than either fully sequential (slow for 1,000+ songs, one network round
     /// trip at a time) or fully unbounded (firing 1,000+ requests simultaneously).
-    private func mapConcurrently<T: Sendable>(_ items: [T], maxConcurrent: Int, transform: @escaping @Sendable (T) async -> T) async -> [T] {
-        var result: [T] = []
+    private func mapConcurrently<T: Sendable, R: Sendable>(_ items: [T], maxConcurrent: Int, transform: @escaping @Sendable (T) async -> R) async -> [R] {
+        var result: [R] = []
         result.reserveCapacity(items.count)
         var index = 0
         while index < items.count {
             let end = min(index + maxConcurrent, items.count)
             let batch = Array(items[index..<end])
-            await withTaskGroup(of: T.self) { group in
+            await withTaskGroup(of: R.self) { group in
                 for item in batch {
                     group.addTask { await transform(item) }
                 }
@@ -287,6 +291,54 @@ final class MusicLibraryService {
             index = end
         }
         return result
+    }
+
+    /// A library song's catalog counterpart's genre, found by searching the catalog for
+    /// its own title + artist -- for when `Song.genreName` comes up empty even after the
+    /// `.with(.genres)` fetch, i.e. Apple Music's library APIs genuinely have no genre
+    /// data for that song (only its catalog counterpart does). This is the same catalog
+    /// search endpoint `lookupArtistArtwork` already uses; if this app is hitting the
+    /// `.developerTokenRequestFailed` issue that's affected artist photos, this will
+    /// fail the same way for the same reason.
+    ///
+    /// - Note: `MusicCatalogSearchRequest(term:types:)` returning a response with a
+    ///   `.songs` collection is my best recollection of this MusicKit API; if it differs
+    ///   in your SDK, Xcode's autocomplete on `response.` will show the current form.
+    func lookupCatalogGenre(title: String, artist: String) async -> String? {
+        let key = "\(title)|\(artist)"
+        if let cached = catalogGenreCache[key] { return cached }
+        var request = MusicCatalogSearchRequest(term: "\(title) \(artist)", types: [Song.self])
+        request.limit = 1
+        do {
+            let response = try await request.response()
+            let genre = response.songs.first?.genreNames.first
+            // `updateValue`, not subscript assignment -- see the same note on
+            // `artistArtworkCache` above; a `cache[key] = nil` here would delete the
+            // entry instead of caching "searched, found nothing."
+            catalogGenreCache.updateValue(genre, forKey: key)
+            return genre
+        } catch {
+            print("Sift DEBUG: lookupCatalogGenre — search failed for \"\(title)\" by \"\(artist)\" — \(error)")
+            catalogGenreCache.updateValue(nil, forKey: key)
+            return nil
+        }
+    }
+
+    /// Batch version of `lookupCatalogGenre` for every song in a playlist -- used by
+    /// Auto-Sort's Genre tab as a fallback only when the library itself has no genre
+    /// data for any song in the playlist at all. Bounded concurrency, same reasoning as
+    /// `fetchFullSongs`'s `.with(.genres)` step: one network call per song, so a
+    /// 1,000+ song playlist can't fire all of them at once.
+    func catalogGenres(for songs: [SiftSong]) async -> [String: String] {
+        let results = await mapConcurrently(songs, maxConcurrent: 20) { song -> (String, String)? in
+            guard let genre = await self.lookupCatalogGenre(title: song.title, artist: song.artist) else { return nil }
+            return (song.libraryID, genre)
+        }
+        var byLibraryID: [String: String] = [:]
+        for case let (libraryID, genre)? in results {
+            byLibraryID[libraryID] = genre
+        }
+        return byLibraryID
     }
 
     /// An artist's real photo from Apple's catalog, looked up by name -- for Auto-Sort's
