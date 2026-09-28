@@ -1,6 +1,23 @@
 import MusicKit
 import Foundation
 
+extension Song {
+    /// A library song's plain `genreNames` property consistently comes back empty --
+    /// the real genre data lives behind the separate `genres` *relationship*, which
+    /// only has a value once explicitly fetched via `.with(.genres)` (see
+    /// `MusicLibraryService.fetchFullSongs`). Prefers that relationship's data, falls
+    /// back to `genreNames` in case a particular `Song` value was never enriched that
+    /// way, and only actually reports "Unknown" once both come up empty.
+    ///
+    /// - Note: `genres` returning a `MusicItemCollection<Genre>?` with a `.name` on
+    ///   each `Genre` is my best recollection of this MusicKit API; if the shape
+    ///   differs in your SDK, Xcode's autocomplete on `self.genres?.first?.` will show
+    ///   the current form.
+    var genreName: String {
+        genres?.first?.name ?? genreNames.first ?? "Unknown"
+    }
+}
+
 struct LibraryPlaylistSummary: Identifiable, Hashable {
     let id: String
     let name: String
@@ -99,12 +116,25 @@ final class MusicLibraryService {
         let detailed = try await basePlaylist.with(.tracks)
         let tracks = detailed.tracks ?? []
 
+        // `genreNames` (a plain property on the `Song` a playlist's own `.tracks`
+        // relationship hands back) consistently comes back empty -- the real genre data
+        // lives behind the separate `genres` *relationship*, which, like a playlist's
+        // own `.tracks`, has to be fetched explicitly via `.with(...)` rather than
+        // coming back for free. `fetchFullSongs` re-fetches these same songs by id and
+        // does that `.with(.genres)` fetch.
+        let orderedIDs = tracks.compactMap { track -> String? in
+            guard case let .song(song) = track else { return nil }
+            return song.id.rawValue
+        }
+        let fullSongsByID = await fetchFullSongs(forLibraryIDs: orderedIDs)
+
         var songs: [SiftSong] = []
         songs.reserveCapacity(tracks.count)
         var mosaicArtwork: [Artwork] = []
 
         for track in tracks {
-            guard case let .song(song) = track else { continue }
+            guard case let .song(trackSong) = track else { continue }
+            let song = fullSongsByID[trackSong.id.rawValue] ?? trackSong
             songCache[song.id.rawValue] = song
             songs.append(
                 SiftSong(
@@ -112,14 +142,7 @@ final class MusicLibraryService {
                     title: song.title,
                     artist: song.artistName,
                     album: song.albumTitle ?? "",
-                    // Confirmed via debug logging: MusicKit returns no genre metadata at
-                    // all for many library songs (matched into iCloud Music Library
-                    // rather than purchased, in practice), regardless of whether it's
-                    // fetched through a playlist's `.tracks` relationship or a direct
-                    // by-id library fetch -- a real Apple Music/MusicKit limitation, not
-                    // a fetch-method problem this app can work around client-side. See
-                    // `AutoSortEngine.genreGroups` for how the Genre tab handles that.
-                    genre: song.genreNames.first ?? "Unknown",
+                    genre: song.genreName,
                     duration: song.duration ?? 0,
                     artwork: song.artwork
                 )
@@ -131,7 +154,7 @@ final class MusicLibraryService {
 
         let unknownGenreCount = songs.filter { $0.genre == "Unknown" }.count
         if unknownGenreCount > 0 {
-            print("Sift DEBUG: loadPlaylist — \(unknownGenreCount)/\(songs.count) songs in \(detailed.name) had no genreNames from MusicKit")
+            print("Sift DEBUG: loadPlaylist — \(unknownGenreCount)/\(songs.count) songs in \(detailed.name) had no genre even after fetching the genres relationship")
         }
 
         let genres = Array(Set(songs.map(\.genre))).sorted()
@@ -191,19 +214,25 @@ final class MusicLibraryService {
                 title: song.title,
                 artist: song.artistName,
                 album: song.albumTitle ?? "",
-                genre: song.genreNames.first ?? "Unknown",
+                genre: song.genreName,
                 duration: song.duration ?? 0,
                 artwork: song.artwork
             )
         }
     }
 
-    /// A direct top-level fetch of `Song`s by library id, used by `resolveSongs` to turn
-    /// a Sift-only playlist's saved ids back into playable songs. Chunked because a
-    /// single `.filter(matching:memberOf:)` call carrying 1,000+ ids (an entire large
-    /// playlist) risks hitting a request-size limit; each chunk runs concurrently and a
-    /// chunk that fails just leaves those ids out of the result rather than failing the
-    /// whole fetch.
+    /// A direct top-level fetch of `Song`s by library id, with each song's `genres`
+    /// relationship also fetched (see `Song.genreName` below). Used by both
+    /// `loadPlaylist` and `resolveSongs`.
+    ///
+    /// Chunked at the request level because a single `.filter(matching:memberOf:)` call
+    /// carrying 1,000+ ids (an entire large playlist) risks hitting a request-size
+    /// limit; those chunk requests run concurrently. The follow-up `.with(.genres)` per
+    /// song is bounded to a modest number at a time instead (`mapConcurrently`) rather
+    /// than firing everything at once, since that's a separate network call per song.
+    /// A chunk or an individual `.with()` call that fails just leaves that song without
+    /// enriched genre data (falling back to its plain, usually-empty `genreNames`)
+    /// rather than failing the whole fetch.
     private func fetchFullSongs(forLibraryIDs ids: [String]) async -> [String: Song] {
         guard !ids.isEmpty else { return [:] }
         let chunkSize = 100
@@ -211,7 +240,7 @@ final class MusicLibraryService {
             Array(ids[$0..<min($0 + chunkSize, ids.count)])
         }
 
-        var result: [String: Song] = [:]
+        var baseSongs: [Song] = []
         await withTaskGroup(of: [Song].self) { group in
             for chunk in chunks {
                 group.addTask {
@@ -222,10 +251,40 @@ final class MusicLibraryService {
                 }
             }
             for await songs in group {
-                for song in songs {
-                    result[song.id.rawValue] = song
+                baseSongs.append(contentsOf: songs)
+            }
+        }
+
+        let enrichedSongs = await mapConcurrently(baseSongs, maxConcurrent: 20) { song in
+            (try? await song.with(.genres)) ?? song
+        }
+
+        var result: [String: Song] = [:]
+        for song in enrichedSongs {
+            result[song.id.rawValue] = song
+        }
+        return result
+    }
+
+    /// Runs `transform` over `items` with at most `maxConcurrent` in flight at once,
+    /// rather than either fully sequential (slow for 1,000+ songs, one network round
+    /// trip at a time) or fully unbounded (firing 1,000+ requests simultaneously).
+    private func mapConcurrently<T: Sendable>(_ items: [T], maxConcurrent: Int, transform: @escaping @Sendable (T) async -> T) async -> [T] {
+        var result: [T] = []
+        result.reserveCapacity(items.count)
+        var index = 0
+        while index < items.count {
+            let end = min(index + maxConcurrent, items.count)
+            let batch = Array(items[index..<end])
+            await withTaskGroup(of: T.self) { group in
+                for item in batch {
+                    group.addTask { await transform(item) }
+                }
+                for await value in group {
+                    result.append(value)
                 }
             }
+            index = end
         }
         return result
     }
