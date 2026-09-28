@@ -61,7 +61,13 @@ struct AutoSortView: View {
                         }
 
                         if proposals.isEmpty {
-                            if mode != .vibe {
+                            if mode == .genre {
+                                Text("Apple Music didn't provide genre data for these songs, so Genre sorting isn't available for this playlist. Try Vibe or Artist instead.")
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 24)
+                            } else if mode != .vibe {
                                 Text("Nothing to propose yet.")
                                     .font(.callout)
                                     .foregroundStyle(.secondary)

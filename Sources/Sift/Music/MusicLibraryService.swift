@@ -99,25 +99,12 @@ final class MusicLibraryService {
         let detailed = try await basePlaylist.with(.tracks)
         let tracks = detailed.tracks ?? []
 
-        // A playlist's own `.tracks` relationship hands back a lighter `Song` than a
-        // direct library fetch does -- in practice its `genreNames` consistently comes
-        // back empty even for songs that show a real genre in Music.app itself, which is
-        // why every song was falling back to "Unknown" here. Re-fetching the same songs
-        // directly by id (the same technique `resolveSongs` already used) gets the
-        // fuller data MusicKit only actually attaches to a top-level `Song` fetch.
-        let trackSongsByID: [String: Song] = tracks.reduce(into: [:]) { result, track in
-            guard case let .song(song) = track else { return }
-            result[song.id.rawValue] = song
-        }
-        let fullSongsByID = await fetchFullSongs(forLibraryIDs: Array(trackSongsByID.keys))
-
         var songs: [SiftSong] = []
         songs.reserveCapacity(tracks.count)
         var mosaicArtwork: [Artwork] = []
 
         for track in tracks {
-            guard case let .song(trackSong) = track else { continue }
-            let song = fullSongsByID[trackSong.id.rawValue] ?? trackSong
+            guard case let .song(song) = track else { continue }
             songCache[song.id.rawValue] = song
             songs.append(
                 SiftSong(
@@ -125,6 +112,13 @@ final class MusicLibraryService {
                     title: song.title,
                     artist: song.artistName,
                     album: song.albumTitle ?? "",
+                    // Confirmed via debug logging: MusicKit returns no genre metadata at
+                    // all for many library songs (matched into iCloud Music Library
+                    // rather than purchased, in practice), regardless of whether it's
+                    // fetched through a playlist's `.tracks` relationship or a direct
+                    // by-id library fetch -- a real Apple Music/MusicKit limitation, not
+                    // a fetch-method problem this app can work around client-side. See
+                    // `AutoSortEngine.genreGroups` for how the Genre tab handles that.
                     genre: song.genreNames.first ?? "Unknown",
                     duration: song.duration ?? 0,
                     artwork: song.artwork
@@ -137,7 +131,7 @@ final class MusicLibraryService {
 
         let unknownGenreCount = songs.filter { $0.genre == "Unknown" }.count
         if unknownGenreCount > 0 {
-            print("Sift DEBUG: loadPlaylist — \(unknownGenreCount)/\(songs.count) songs in \(detailed.name) had no genreNames from MusicKit even after a direct fetch")
+            print("Sift DEBUG: loadPlaylist — \(unknownGenreCount)/\(songs.count) songs in \(detailed.name) had no genreNames from MusicKit")
         }
 
         let genres = Array(Set(songs.map(\.genre))).sorted()
@@ -204,12 +198,12 @@ final class MusicLibraryService {
         }
     }
 
-    /// A direct top-level fetch of `Song`s by library id -- unlike a `Song` reached via
-    /// a playlist's `.tracks` relationship, this reliably has `genreNames` populated.
-    /// Chunked because a single `.filter(matching:memberOf:)` call carrying 1,000+ ids
-    /// (an entire large playlist) risks hitting a request-size limit; each chunk runs
-    /// concurrently and a chunk that fails just leaves those ids out of the result
-    /// rather than failing the whole fetch.
+    /// A direct top-level fetch of `Song`s by library id, used by `resolveSongs` to turn
+    /// a Sift-only playlist's saved ids back into playable songs. Chunked because a
+    /// single `.filter(matching:memberOf:)` call carrying 1,000+ ids (an entire large
+    /// playlist) risks hitting a request-size limit; each chunk runs concurrently and a
+    /// chunk that fails just leaves those ids out of the result rather than failing the
+    /// whole fetch.
     private func fetchFullSongs(forLibraryIDs ids: [String]) async -> [String: Song] {
         guard !ids.isEmpty else { return [:] }
         let chunkSize = 100

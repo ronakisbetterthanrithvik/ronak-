@@ -8,7 +8,19 @@ import SwiftUI
 @MainActor
 enum AutoSortEngine {
     static func genreGroups(from songs: [SiftSong]) -> [ProposedPlaylist] {
-        groups(from: songs, keysFor: { [$0.genre] }, minimumSongs: 1, defaultSelected: true)
+        let result = groups(from: songs, keysFor: { [$0.genre] }, minimumSongs: 1, defaultSelected: true)
+        // Some library songs -- confirmed via debug logging in `MusicLibraryService`,
+        // consistent across both a playlist's own `.tracks` fetch and a direct by-id
+        // library fetch -- come back from MusicKit with no genre metadata at all. That's
+        // a real Apple Music/MusicKit limitation for those songs (often ones matched
+        // into iCloud Music Library rather than purchased), not something this app can
+        // force to appear. When every single song in the playlist is affected, a lone
+        // "Unknown" bucket covering all of them isn't a real grouping -- show nothing
+        // instead of a group that just looks broken.
+        if result.count == 1, result[0].name == "Unknown" {
+            return []
+        }
+        return result
     }
 
     static func artistGroups(from songs: [SiftSong], minimumSongs: Int = 3) -> [ProposedPlaylist] {
