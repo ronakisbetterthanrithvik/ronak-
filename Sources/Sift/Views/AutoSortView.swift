@@ -172,26 +172,28 @@ struct AutoSortView: View {
     /// offers to look each song's genre up from Apple Music's public catalog instead,
     /// rather than silently firing hundreds of catalog searches on every playlist open.
     private var genreEmptyState: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let catalogGenreError {
-                Text(catalogGenreError)
-                    .font(.caption)
-                    .foregroundStyle(Theme.accentSecondary)
-            }
+        VStack(spacing: 16) {
+            Spacer(minLength: 0)
+
+            Image(systemName: "square.grid.2x2.fill")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(Theme.accentSecondary)
+                .padding(.bottom, 2)
 
             Button {
                 fetchCatalogGenres()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     if isFetchingCatalogGenres {
                         ProgressView().controlSize(.small).tint(.white)
                     }
-                    Text(isFetchingCatalogGenres ? "Looking up genres…" : "Categorize by Genre")
+                    Text(isFetchingCatalogGenres ? "Categorizing…" : "Categorize by Genre")
                 }
-                .font(.system(size: 13, weight: .semibold))
-                .padding(.horizontal, 18)
-                .padding(.vertical, 9)
-                .background(Capsule().fill(Theme.accentGradient))
+                .font(.system(size: 15, weight: .semibold))
+                .padding(.horizontal, 28)
+                .padding(.vertical, 13)
+                .background(Capsule().fill(Color.black))
+                .glassEdge(Capsule(), lineWidth: 1.25, baseOpacity: 0.4)
                 .foregroundStyle(.white)
             }
             .buttonStyle(.plain)
@@ -200,9 +202,17 @@ struct AutoSortView: View {
             Text("This may take up to a few minutes")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            if let catalogGenreError {
+                Text(catalogGenreError)
+                    .font(.caption)
+                    .foregroundStyle(Theme.accentSecondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity, minHeight: 420)
     }
 
     /// Searches Apple Music's catalog for each song's own title + artist and re-groups
