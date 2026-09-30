@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 enum MusicServiceChoice: String {
     case appleMusic
@@ -17,7 +18,7 @@ struct MusicServiceChooserView: View {
     var body: some View {
         ZStack {
             Theme.background
-            Theme.ambientGlow
+            chooserAmbientGlow
 
             VStack(spacing: 36) {
                 VStack(spacing: 8) {
@@ -32,8 +33,9 @@ struct MusicServiceChooserView: View {
                     serviceCard(
                         title: "Apple Music",
                         subtitle: "Library, Auto-Sort, Vibe, and the AI Playlist Generator",
-                        icon: "music.note",
-                        gradient: Theme.accentGradient
+                        imageName: "AppleMusicLogo",
+                        fallbackSymbol: "music.note",
+                        fallbackGradient: Theme.accentGradient
                     ) {
                         onChoose(.appleMusic)
                     }
@@ -41,8 +43,9 @@ struct MusicServiceChooserView: View {
                     serviceCard(
                         title: "Spotify",
                         subtitle: "Coming soon",
-                        icon: "waveform",
-                        gradient: Self.spotifyGradient
+                        imageName: "SpotifyLogo",
+                        fallbackSymbol: "waveform",
+                        fallbackGradient: Self.spotifyGradient
                     ) {
                         onChoose(.spotify)
                     }
@@ -52,8 +55,40 @@ struct MusicServiceChooserView: View {
         }
     }
 
+    /// Only shown on this chooser screen -- both services are still an open choice here,
+    /// so the ambient glow carries both brand colors (Sift's own red plus Spotify's
+    /// green). The moment a service is actually picked, every other screen goes back to
+    /// `Theme.ambientGlow`'s plain red, with no green at all.
+    private var chooserAmbientGlow: some View {
+        ZStack {
+            Circle()
+                .fill(Theme.accentPrimary.opacity(0.20))
+                .frame(width: 420, height: 420)
+                .blur(radius: 140)
+                .offset(x: -260, y: -180)
+            Circle()
+                .fill(Theme.accentSecondary.opacity(0.14))
+                .frame(width: 320, height: 320)
+                .blur(radius: 140)
+                .offset(x: -100, y: 80)
+            Circle()
+                .fill(Self.spotifyGreen.opacity(0.20))
+                .frame(width: 420, height: 420)
+                .blur(radius: 140)
+                .offset(x: 260, y: -180)
+            Circle()
+                .fill(Self.spotifyGreen.opacity(0.14))
+                .frame(width: 320, height: 320)
+                .blur(radius: 140)
+                .offset(x: 100, y: 80)
+        }
+    }
+
+    static let spotifyGreen = Color(red: 0.11, green: 0.73, blue: 0.33)
+    static let spotifyGreenDark = Color(red: 0.05, green: 0.4, blue: 0.2)
+
     static let spotifyGradient = LinearGradient(
-        colors: [Color(red: 0.11, green: 0.73, blue: 0.33), Color(red: 0.05, green: 0.4, blue: 0.2)],
+        colors: [spotifyGreen, spotifyGreenDark],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
@@ -61,16 +96,14 @@ struct MusicServiceChooserView: View {
     private func serviceCard(
         title: String,
         subtitle: String,
-        icon: String,
-        gradient: LinearGradient,
+        imageName: String,
+        fallbackSymbol: String,
+        fallbackGradient: LinearGradient,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             VStack(spacing: 16) {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(gradient)
-                    .frame(width: 72, height: 72)
-                    .overlay(Image(systemName: icon).font(.system(size: 28)).foregroundStyle(.white))
+                brandIcon(named: imageName, fallbackSymbol: fallbackSymbol, fallbackGradient: fallbackGradient)
 
                 VStack(spacing: 6) {
                     Text(title).font(.system(size: 17, weight: .semibold))
@@ -90,6 +123,26 @@ struct MusicServiceChooserView: View {
     }
 }
 
+/// Loads a bundled logo file by name (an already-square app icon like Apple Music's or
+/// Spotify's own mark, dropped into the app bundle the same way `Theme.appIcon` loads
+/// `SiftIcon.png` -- no asset catalog entry required), falling back to a plain SF Symbol
+/// tile in the brand's gradient if the file hasn't been added to the Xcode target yet.
+@ViewBuilder
+func brandIcon(named imageName: String, fallbackSymbol: String, fallbackGradient: LinearGradient, size: CGFloat = 72) -> some View {
+    if let nsImage = NSImage(named: imageName) {
+        Image(nsImage: nsImage)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+    } else {
+        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+            .fill(fallbackGradient)
+            .frame(width: size, height: size)
+            .overlay(Image(systemName: fallbackSymbol).font(.system(size: size * 0.39)).foregroundStyle(.white))
+    }
+}
+
 /// Shown after picking Spotify on the chooser above, since real Spotify support isn't
 /// built yet -- says so plainly instead of silently doing nothing, and offers a way into
 /// the one fully working path (Apple Music) without restarting the app.
@@ -102,10 +155,12 @@ struct SpotifyComingSoonView: View {
             Theme.ambientGlow
 
             VStack(spacing: 20) {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(MusicServiceChooserView.spotifyGradient)
-                    .frame(width: 84, height: 84)
-                    .overlay(Image(systemName: "waveform").font(.system(size: 32)).foregroundStyle(.white))
+                brandIcon(
+                    named: "SpotifyLogo",
+                    fallbackSymbol: "waveform",
+                    fallbackGradient: MusicServiceChooserView.spotifyGradient,
+                    size: 84
+                )
 
                 VStack(spacing: 8) {
                     Text("Spotify support is on the way")
