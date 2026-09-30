@@ -1,7 +1,7 @@
 import Foundation
 
 enum ClaudeVibeError: LocalizedError {
-    case missingAPIKey
+    case proxyNotConfigured
     case network(Error)
     case badStatus(Int, String)
     case unparsableResponse
@@ -9,8 +9,8 @@ enum ClaudeVibeError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            return "Add your Anthropic API key first."
+        case .proxyNotConfigured:
+            return "Vibe isn't set up yet -- ClaudeVibeService.proxyEndpoint still has a placeholder URL."
         case .network(let error):
             return "Couldn't reach Claude: \(error.localizedDescription)"
         case .badStatus(let code, let message):
@@ -33,16 +33,23 @@ struct ClaudeVibeResult {
 /// Auto-Sort's Vibe tab. Nothing here is invented by Sift itself: Claude only ever picks
 /// from the exact songs it's given, never songs it makes up.
 ///
-/// This is a real network call to Anthropic's API using the key the person enters
-/// themselves (stored in the Keychain, never shipped with the app) -- Sift has no
-/// server of its own and no key of its own.
+/// This talks to Sift's own small proxy server (see `CloudflareWorker/vibe-proxy.js` in
+/// the repo), not Anthropic directly -- the proxy holds the real Anthropic API key
+/// privately server-side, so it's never shipped inside the app where anyone could
+/// extract it. Every person who downloads Sift shares that one server-side key; the
+/// proxy rate-limits per IP to keep any single client from burning through it.
 enum ClaudeVibeService {
-    private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
-    private static let model = "claude-haiku-4-5-20251001"
+    /// Replace with your deployed Worker's own URL (looks like
+    /// "https://sift-vibe-proxy.<your-subdomain>.workers.dev") once you've deployed
+    /// `CloudflareWorker/vibe-proxy.js`.
+    private static let proxyEndpoint = URL(string: "https://REPLACE-WITH-YOUR-WORKER-URL.workers.dev")!
+    /// Must match `SIFT_CLIENT_HEADER_VALUE` in `CloudflareWorker/vibe-proxy.js` -- see
+    /// that file's security notes for what this header is (and isn't) protecting against.
+    private static let clientHeaderValue = "sift-macos-app-v1"
 
     static func curatePlaylist(request: String, from songs: [SiftSong]) async throws -> ClaudeVibeResult {
-        guard let apiKey = AnthropicAPIKeyStore.load(), !apiKey.isEmpty else {
-            throw ClaudeVibeError.missingAPIKey
+        guard proxyEndpoint.host != "REPLACE-WITH-YOUR-WORKER-URL.workers.dev" else {
+            throw ClaudeVibeError.proxyNotConfigured
         }
 
         let songList = songs
@@ -72,17 +79,17 @@ enum ClaudeVibeService {
         \(songList)
         """
 
+        // No `model` field -- the proxy pins its own model server-side rather than
+        // trusting a client-supplied one.
         let body = ClaudeRequest(
-            model: model,
             maxTokens: 8192,
             system: systemPrompt,
             messages: [.init(role: "user", content: userMessage)]
         )
 
-        var urlRequest = URLRequest(url: endpoint)
+        var urlRequest = URLRequest(url: proxyEndpoint)
         urlRequest.httpMethod = "POST"
-        urlRequest.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        urlRequest.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        urlRequest.setValue(clientHeaderValue, forHTTPHeaderField: "X-Sift-Client")
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
         urlRequest.httpBody = try JSONEncoder().encode(body)
 
@@ -144,13 +151,12 @@ private struct RawCuratedPlaylist: Decodable {
 }
 
 private struct ClaudeRequest: Encodable {
-    let model: String
     let maxTokens: Int
     let system: String
     let messages: [ClaudeMessage]
 
     enum CodingKeys: String, CodingKey {
-        case model, system, messages
+        case system, messages
         case maxTokens = "max_tokens"
     }
 }

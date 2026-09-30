@@ -8,8 +8,6 @@ struct AutoSortView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var mode: AutoSortMode = .genre
 
-    @State private var hasAPIKey = AnthropicAPIKeyStore.load() != nil
-    @State private var apiKeyInput = ""
     @State private var vibeRequestText = ""
     @State private var isGeneratingVibe = false
     @State private var vibeError: String?
@@ -95,72 +93,59 @@ struct AutoSortView: View {
 
     // MARK: - Vibe
 
-    @ViewBuilder
     private var vibeControls: some View {
-        if !hasAPIKey {
-            apiKeyEntry
-        } else {
-            VStack(alignment: .leading, spacing: 10) {
-                ZStack(alignment: .topLeading) {
-                    // TextEditor carries its own small built-in inset on top of whatever
-                    // padding is set here (there's no public way to zero it out), so this
-                    // is shaved down from the placeholder's padding below to land the
-                    // cursor roughly where the placeholder text starts -- nudge these two
-                    // padding values together if it's still off after rebuilding.
-                    TextEditor(text: $vibeRequestText)
+        VStack(alignment: .leading, spacing: 10) {
+            ZStack(alignment: .topLeading) {
+                // TextEditor carries its own small built-in inset on top of whatever
+                // padding is set here (there's no public way to zero it out), so this
+                // is shaved down from the placeholder's padding below to land the
+                // cursor roughly where the placeholder text starts -- nudge these two
+                // padding values together if it's still off after rebuilding.
+                TextEditor(text: $vibeRequestText)
+                    .font(.callout)
+                    .scrollContentBackground(.hidden)
+                    .frame(height: 90)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 12)
+
+                if vibeRequestText.isEmpty {
+                    Text("e.g. \"Give me a playlist with only NBA YoungBoy and Lil Uzi Vert, plus some other hype songs from this playlist\"")
                         .font(.callout)
-                        .scrollContentBackground(.hidden)
-                        .frame(height: 90)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 12)
-
-                    if vibeRequestText.isEmpty {
-                        Text("e.g. \"Give me a playlist with only NBA YoungBoy and Lil Uzi Vert, plus some other hype songs from this playlist\"")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 16)
-                            .allowsHitTesting(false)
-                    }
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 16)
+                        .allowsHitTesting(false)
                 }
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
+            }
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
 
-                if let vibeError {
-                    Text(vibeError)
-                        .font(.caption)
-                        .foregroundStyle(Theme.accentSecondary)
-                }
-
-                HStack {
-                    Button("Use a different API key") {
-                        hasAPIKey = false
-                        apiKeyInput = ""
-                    }
-                    .buttonStyle(.plain)
+            if let vibeError {
+                Text(vibeError)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.accentSecondary)
+            }
 
-                    Spacer()
+            HStack {
+                Spacer()
 
-                    Button {
-                        generateVibePlaylist()
-                    } label: {
-                        HStack(spacing: 6) {
-                            if isGeneratingVibe {
-                                ProgressView().controlSize(.small).tint(.white)
-                            }
-                            Text(isGeneratingVibe ? "Thinking…" : "Generate")
+                Button {
+                    generateVibePlaylist()
+                } label: {
+                    HStack(spacing: 6) {
+                        if isGeneratingVibe {
+                            ProgressView().controlSize(.small).tint(.white)
                         }
-                        .font(.system(size: 13, weight: .semibold))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 9)
-                        .background(Capsule().fill(Theme.accentGradient))
-                        .foregroundStyle(.white)
+                        Text(isGeneratingVibe ? "Thinking…" : "Generate")
                     }
-                    .buttonStyle(.plain)
-                    .disabled(isGeneratingVibe || vibeRequestText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(Theme.accentGradient))
+                    .foregroundStyle(.white)
                 }
+                .buttonStyle(.plain)
+                .disabled(isGeneratingVibe || vibeRequestText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }
@@ -243,32 +228,6 @@ struct AutoSortView: View {
                 proposalsByMode[.genre] = groups
             }
             isFetchingCatalogGenres = false
-        }
-    }
-
-    private var apiKeyEntry: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Vibe uses Claude, Anthropic's AI, to understand a free-text request like this — add your own Anthropic API key to use it. It's stored in the macOS Keychain and sent only to Anthropic's API, never anywhere else.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
-            SecureField("Anthropic API key", text: $apiKeyInput)
-                .textFieldStyle(.plain)
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
-
-            Button("Save Key") {
-                AnthropicAPIKeyStore.save(apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines))
-                hasAPIKey = true
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 13, weight: .semibold))
-            .padding(.horizontal, 18)
-            .padding(.vertical, 9)
-            .background(Capsule().fill(Theme.accentGradient))
-            .foregroundStyle(.white)
-            .disabled(apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
