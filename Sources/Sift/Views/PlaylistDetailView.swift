@@ -9,6 +9,12 @@ private enum Stage {
 }
 
 struct PlaylistDetailView: View {
+    #if DEBUG
+    /// Temporary diagnostic counter for the track-list scrolling-lag investigation --
+    /// see the prints in `body` and `trackRow`. Remove once the real cause is found.
+    static var trackRowBuildCount = 0
+    #endif
+
     @StateObject private var auth = MusicAuthorizationService.shared
     @StateObject private var playback = PlaybackService.shared
 
@@ -53,7 +59,15 @@ struct PlaylistDetailView: View {
     }
 
     var body: some View {
-        ZStack {
+        #if DEBUG
+        // Temporary diagnostic for the track-list scrolling lag -- prints which @State/
+        // @StateObject property caused this view's body to re-run, and how often, so we
+        // can tell a genuine per-row re-render storm apart from something else entirely
+        // (Instruments isn't available in this remote setup, so this is the next best
+        // signal). Remove once the real cause is found.
+        Self._printChanges()
+        #endif
+        return ZStack {
             Group {
                 switch stage {
                 case .connecting:
@@ -683,7 +697,16 @@ struct PlaylistDetailView: View {
     }
 
     private func trackRow(song: SiftSong, index: Int, isNowPlaying: Bool) -> some View {
-        HStack(spacing: 12) {
+        #if DEBUG
+        // Temporary diagnostic alongside the one in `body` -- counts how many times a
+        // row actually gets (re)built while scrolling, so we can compare that against how
+        // many rows are ever visible at once. Remove once the real cause is found.
+        Self.trackRowBuildCount += 1
+        if Self.trackRowBuildCount % 20 == 0 {
+            print("Sift DEBUG: trackRow built \(Self.trackRowBuildCount) times so far (just built row \(index): \(song.title))")
+        }
+        #endif
+        return HStack(spacing: 12) {
             rowArtwork(for: song, size: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
