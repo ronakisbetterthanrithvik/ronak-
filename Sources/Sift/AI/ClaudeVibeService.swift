@@ -42,12 +42,15 @@ enum ClaudeVibeService {
 
         Select songs from that list ONLY -- never invent a song, artist, or id that isn't \
         in the list. Favor precision: if the request names one or more specific artists \
-        (e.g. "all the Drake songs," "a playlist of just X"), include ONLY songs credited \
-        to exactly those artists -- never a collaborator, a featured artist, or a \
-        similar/associated artist, even one closely linked to the artist named. Only \
-        include other artists' songs when the request itself explicitly asks for more \
-        than the named artist(s) alone (e.g. "and similar artists," a mood/genre/activity \
-        that isn't artist-specific). Choose a reasonable number of songs for the request \
+        (e.g. "all the Drake songs," "a playlist of just X"), include a song only if one \
+        of those named artists is actually credited on it -- as the primary artist, a \
+        co-billed artist ("Drake & PARTYNEXTDOOR"), or a featured artist ("Song (feat. \
+        Drake)") all count as credited. Do NOT include a song where none of the named \
+        artists appear in the credit at all, even if it's stylistically similar or by a \
+        closely associated artist -- being "in the same lane" is not being credited. Only \
+        broaden beyond songs actually credited to the named artist(s) when the request \
+        itself asks for more (e.g. "and similar artists," a mood/genre/activity that \
+        isn't artist-specific). Choose a reasonable number of songs for the request \
         (don't include the whole library unless asked).
 
         Respond with ONLY a single JSON object and nothing else -- no prose, no markdown \
