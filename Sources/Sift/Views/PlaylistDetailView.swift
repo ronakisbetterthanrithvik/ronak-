@@ -3,8 +3,6 @@ import SwiftUI
 import AppKit
 
 private enum Stage {
-    case chooseService
-    case spotifyComingSoon
     case connecting
     case pickingPlaylist
     case ready
@@ -14,25 +12,8 @@ struct PlaylistDetailView: View {
     @StateObject private var auth = MusicAuthorizationService.shared
     @StateObject private var playback = PlaybackService.shared
 
-    @State private var stage: Stage = .chooseService
+    @State private var stage: Stage = .connecting
     @State private var isDemoMode = true
-
-    /// Which streaming service was picked on `MusicServiceChooserView`, persisted so a
-    /// returning person doesn't have to choose again on every launch. Empty means no
-    /// choice has been made yet (a fresh install).
-    @AppStorage("sift.selectedMusicService") private var selectedServiceRaw = ""
-
-    init() {
-        let saved = UserDefaults.standard.string(forKey: "sift.selectedMusicService") ?? ""
-        switch saved {
-        case MusicServiceChoice.appleMusic.rawValue:
-            _stage = State(initialValue: .connecting)
-        case MusicServiceChoice.spotify.rawValue:
-            _stage = State(initialValue: .spotifyComingSoon)
-        default:
-            _stage = State(initialValue: .chooseService)
-        }
-    }
 
     @State private var libraryPlaylists: [LibraryPlaylistSummary] = []
     @State private var isLoadingLibrary = false
@@ -75,13 +56,6 @@ struct PlaylistDetailView: View {
         ZStack {
             Group {
                 switch stage {
-                case .chooseService:
-                    MusicServiceChooserView(onChoose: handleServiceChoice)
-                case .spotifyComingSoon:
-                    SpotifyComingSoonView(onUseAppleMusicInstead: {
-                        selectedServiceRaw = MusicServiceChoice.appleMusic.rawValue
-                        stage = .connecting
-                    })
                 case .connecting:
                     ConnectView(status: authorizationDisplay, onConnect: connectToAppleMusic, onUseDemoData: useDemoData)
                 case .pickingPlaylist:
@@ -146,11 +120,7 @@ struct PlaylistDetailView: View {
         }
         .task {
             auth.refreshStatus()
-            // Only auto-skip straight to the library when Apple Music has actually been
-            // chosen on `MusicServiceChooserView` -- macOS's own Apple Music permission
-            // can already be granted from a previous launch, so checking `auth.isAuthorized`
-            // alone would jump straight past the chooser (and past the Spotify screen too).
-            if auth.isAuthorized && selectedServiceRaw == MusicServiceChoice.appleMusic.rawValue {
+            if auth.isAuthorized {
                 await loadLibraryPlaylists()
             }
         }
@@ -227,16 +197,6 @@ struct PlaylistDetailView: View {
                     showSiftPlaylists = false
                 }
             }
-        }
-    }
-
-    // MARK: - Service selection
-
-    private func handleServiceChoice(_ choice: MusicServiceChoice) {
-        selectedServiceRaw = choice.rawValue
-        switch choice {
-        case .appleMusic: stage = .connecting
-        case .spotify: stage = .spotifyComingSoon
         }
     }
 
