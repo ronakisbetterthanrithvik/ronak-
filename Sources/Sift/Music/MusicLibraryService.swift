@@ -460,11 +460,18 @@ final class MusicLibraryService {
     /// them again on a later launch without a fresh catalog search (see the catalog
     /// fallback in `fetchFullSongs`). Suggestions the catalog has no match for are
     /// silently dropped rather than represented as a broken song.
+    ///
+    /// Two different suggested (title, artist) strings -- a near-duplicate spelling, a
+    /// "(feat. X)" variant, or Claude just repeating itself -- can both resolve to the
+    /// same underlying catalog song, since `lookupCatalogSong` caches by the input
+    /// title/artist string, not by the resolved id. Dedupe by the resolved song's own id
+    /// so the same song never ends up twice in one generated playlist.
     func resolveCatalogSongs(for suggestions: [CatalogSongSuggestion]) async -> [SiftSong] {
         let resolved = await mapConcurrently(suggestions, maxConcurrent: 20) { suggestion in
             await self.lookupCatalogSong(title: suggestion.title, artist: suggestion.artist)
         }
-        let songs = resolved.compactMap { $0 }
+        var seenIDs = Set<String>()
+        let songs = resolved.compactMap { $0 }.filter { seenIDs.insert($0.id.rawValue).inserted }
         for song in songs {
             songCache[song.id.rawValue] = song
         }
