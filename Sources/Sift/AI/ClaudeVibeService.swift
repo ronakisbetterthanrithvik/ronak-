@@ -41,10 +41,14 @@ enum ClaudeVibeService {
         free-text request describing the playlist they want made from it.
 
         Select songs from that list ONLY -- never invent a song, artist, or id that isn't \
-        in the list. Favor precision: if the request names specific artists, prioritize \
-        their songs; broaden to similar/complementary songs already in the list only when \
-        the request asks for more than those artists alone provide. Choose a reasonable \
-        number of songs for the request (don't include the whole library unless asked).
+        in the list. Favor precision: if the request names one or more specific artists \
+        (e.g. "all the Drake songs," "a playlist of just X"), include ONLY songs credited \
+        to exactly those artists -- never a collaborator, a featured artist, or a \
+        similar/associated artist, even one closely linked to the artist named. Only \
+        include other artists' songs when the request itself explicitly asks for more \
+        than the named artist(s) alone (e.g. "and similar artists," a mood/genre/activity \
+        that isn't artist-specific). Choose a reasonable number of songs for the request \
+        (don't include the whole library unless asked).
 
         Respond with ONLY a single JSON object and nothing else -- no prose, no markdown \
         fences -- in exactly this shape:
