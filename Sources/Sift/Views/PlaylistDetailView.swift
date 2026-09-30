@@ -146,7 +146,11 @@ struct PlaylistDetailView: View {
         }
         .task {
             auth.refreshStatus()
-            if auth.isAuthorized {
+            // Only auto-skip straight to the library when Apple Music has actually been
+            // chosen on `MusicServiceChooserView` -- macOS's own Apple Music permission
+            // can already be granted from a previous launch, so checking `auth.isAuthorized`
+            // alone would jump straight past the chooser (and past the Spotify screen too).
+            if auth.isAuthorized && selectedServiceRaw == MusicServiceChoice.appleMusic.rawValue {
                 await loadLibraryPlaylists()
             }
         }
