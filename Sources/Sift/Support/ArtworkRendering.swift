@@ -21,8 +21,13 @@ import MusicKit
 ///   turns out not to be trustworthy for a personal library's synced song artwork, and
 ///   trusting it produced a much *more* aggressive crop than this flat approach, not a
 ///   more precise one.)
-/// - A personal playlist's own custom cover, though, can be any photo a person picked,
-///   so those call sites still pass a taller `overscan`.
+/// - A personal playlist's own custom cover, in practice, also comes back square almost
+///   always -- Music.app's own picker for setting one only ever lets a person crop to a
+///   square in the first place, same as this one. A 1.5x margin there (an earlier,
+///   more cautious guess in case a cover somehow wasn't square) was cropping away real,
+///   visible content Apple Music itself shows uncropped; those call sites now use a much
+///   smaller margin, just enough to cover a cover that's occasionally a few percent off
+///   a perfect square without meaningfully over-cropping the common square case.
 func squareArtwork(_ artwork: Artwork, size: CGFloat, overscan: CGFloat = 1.0) -> some View {
     ArtworkImage(artwork, width: size * overscan, height: size * overscan)
         .frame(width: size, height: size)
