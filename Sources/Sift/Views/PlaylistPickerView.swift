@@ -230,7 +230,19 @@ struct PlaylistPickerView: View {
                     .frame(width: size, height: size)
                     .clipped()
             } else {
-                artworkPlaceholder.frame(width: size, height: size)
+                // No custom cover was picked for this Sift-only playlist -- fall back to
+                // the same 2x2 mosaic-of-its-own-songs treatment a real library playlist
+                // without custom art already gets, rather than a generic placeholder tile.
+                switch covers[item.id] {
+                case .mosaic(let artworks):
+                    mosaic(artworks, size: size)
+                case .unavailable, .single:
+                    artworkPlaceholder.frame(width: size, height: size)
+                case nil:
+                    artworkPlaceholder
+                        .frame(width: size, height: size)
+                        .task { await loadSiftMosaic(owned: owned, key: item.id) }
+                }
             }
         }
     }
@@ -245,6 +257,16 @@ struct PlaylistPickerView: View {
         } else {
             covers[summary.id] = .unavailable
         }
+    }
+
+    /// A Sift-only playlist only stores its songs' library ids, not their artwork, so
+    /// building its mosaic (unlike a real library playlist's, which MusicKit hands back
+    /// directly) means resolving a few of those songs first.
+    private func loadSiftMosaic(owned: SiftOwnedPlaylist, key: String) async {
+        guard covers[key] == nil else { return }
+        let songs = await MusicLibraryService.shared.resolveSongs(forLibraryIDs: Array(owned.songLibraryIDs.prefix(4)))
+        let artworks = songs.compactMap(\.artwork)
+        covers[key] = artworks.isEmpty ? .unavailable : .mosaic(artworks)
     }
 
     /// Matches how Apple Music itself covers a personal playlist with no custom artwork:
