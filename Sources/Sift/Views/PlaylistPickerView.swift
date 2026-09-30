@@ -32,6 +32,8 @@ struct PlaylistPickerView: View {
     /// replaces a flat spacing constant between tile *centers*.
     private let tileGap: CGFloat = 28
 
+    @State private var showAIGenerator = false
+
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
@@ -39,6 +41,7 @@ struct PlaylistPickerView: View {
 
             VStack(spacing: 28) {
                 header
+                aiGeneratorBanner
 
                 if isLoading {
                     Spacer()
@@ -82,6 +85,60 @@ struct PlaylistPickerView: View {
             }
         }
         .onChange(of: playlists) { _ in selectedIndex = 0 }
+        .sheet(isPresented: $showAIGenerator) {
+            AIPlaylistGeneratorView()
+        }
+    }
+
+    /// Entry point for building a playlist from anywhere in Apple Music's catalog
+    /// (`AIPlaylistGeneratorView`/`CatalogPlaylistGeneratorService`) -- distinct from
+    /// Auto-Sort's Vibe tab, which only curates from a playlist already open, so it
+    /// lives on this screen rather than nested inside one playlist's own tools.
+    private var aiGeneratorBanner: some View {
+        Button {
+            showAIGenerator = true
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Theme.accentGradient))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text("AI Playlist Generator")
+                            .font(.system(size: 14, weight: .semibold))
+                        HStack(spacing: 3) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 9))
+                            Text("HOT")
+                                .font(.system(size: 9, weight: .bold))
+                                .tracking(0.5)
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Theme.accentGradient))
+                    }
+                    Text("Describe a vibe -- Sift builds it from all of Apple Music")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(Capsule().fill(Color.black))
+            .glassEdge(Capsule(), lineWidth: 1.25, baseOpacity: 0.4)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 32)
     }
 
     private var header: some View {

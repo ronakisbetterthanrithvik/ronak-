@@ -62,6 +62,11 @@ final class MusicLibraryService {
     /// so re-opening the same playlist's Genre tab never re-searches the same song twice.
     private var catalogGenreCache: [String: String?] = [:]
 
+    /// "title|artist" -> the real catalog `Song` that search matched (or nil if nothing
+    /// did) -- for the AI Playlist Generator, which asks Claude to suggest songs from
+    /// its own knowledge that then need verifying against the real catalog.
+    private var catalogSongCache: [String: Song?] = [:]
+
     /// How many catalog search requests (`withRetries`) are allowed to actually be in
     /// flight at once, app-wide -- see `acquireCatalogSlot`/`releaseCatalogSlot`.
     private var catalogRequestSlots = 4
@@ -289,6 +294,24 @@ final class MusicLibraryService {
             }
         }
 
+        // Any ids the library fetch didn't find are most likely catalog-only songs --
+        // ones the AI Playlist Generator added from Apple Music's full catalog rather
+        // than from anything already in the person's own library. Those still resolve
+        // fine through a catalog-scoped fetch by the same id.
+        //
+        // - Note: `MusicCatalogResourceRequest<Song>(matching:memberOf:)` is my best
+        //   recollection of this MusicKit API; if the signature differs in your SDK,
+        //   Xcode's autocomplete on `MusicCatalogResourceRequest<Song>(` will show the
+        //   current form.
+        let foundIDs = Set(baseSongs.map { $0.id.rawValue })
+        let missingIDs = ids.filter { !foundIDs.contains($0) }
+        if !missingIDs.isEmpty {
+            let catalogRequest = MusicCatalogResourceRequest<Song>(matching: \.id, memberOf: missingIDs.map { MusicItemID($0) })
+            if let catalogResponse = try? await catalogRequest.response() {
+                baseSongs.append(contentsOf: catalogResponse.items)
+            }
+        }
+
         let enrichedSongs = await mapConcurrently(baseSongs, maxConcurrent: 20) { song in
             (try? await song.with(.genres)) ?? song
         }
@@ -393,6 +416,69 @@ final class MusicLibraryService {
             byLibraryID[libraryID] = genre
         }
         return byLibraryID
+    }
+
+    /// A single suggested song (title + artist) for the AI Playlist Generator to verify
+    /// against Apple Music's real catalog -- see `resolveCatalogSongs`.
+    struct CatalogSongSuggestion: Sendable {
+        let title: String
+        let artist: String
+    }
+
+    /// Searches the catalog for one suggested song and returns the real match, if Apple
+    /// Music actually has it -- Claude's own suggestions (from its training knowledge,
+    /// not a live catalog lookup) can name a song that's misspelled, doesn't exist, or
+    /// isn't on Apple Music, so every suggestion has to be verified this way rather than
+    /// trusted outright.
+    func lookupCatalogSong(title: String, artist: String) async -> Song? {
+        let key = "\(title)|\(artist)"
+        if let cached = catalogSongCache[key] { return cached }
+        do {
+            let response = try await withRetries {
+                var request = MusicCatalogSearchRequest(term: "\(title) \(artist)", types: [Song.self])
+                request.limit = 1
+                return try await request.response()
+            }
+            let matched = response.songs.first
+            if matched == nil {
+                print("Sift DEBUG: lookupCatalogSong — catalog search for \"\(title)\" by \"\(artist)\" returned no songs")
+            }
+            // `updateValue`, not subscript assignment -- see the same note on
+            // `artistArtworkCache` above.
+            catalogSongCache.updateValue(matched, forKey: key)
+            return matched
+        } catch {
+            print("Sift DEBUG: lookupCatalogSong — search failed for \"\(title)\" by \"\(artist)\" — \(error)")
+            catalogSongCache.updateValue(nil, forKey: key)
+            return nil
+        }
+    }
+
+    /// Batch version of `lookupCatalogSong` for a whole suggested tracklist -- resolved
+    /// songs get cached by `songCache` too (keyed by their catalog id, same as a library
+    /// song would be), so `PlaybackService` can play them and `resolveSongs` can find
+    /// them again on a later launch without a fresh catalog search (see the catalog
+    /// fallback in `fetchFullSongs`). Suggestions the catalog has no match for are
+    /// silently dropped rather than represented as a broken song.
+    func resolveCatalogSongs(for suggestions: [CatalogSongSuggestion]) async -> [SiftSong] {
+        let resolved = await mapConcurrently(suggestions, maxConcurrent: 20) { suggestion in
+            await self.lookupCatalogSong(title: suggestion.title, artist: suggestion.artist)
+        }
+        let songs = resolved.compactMap { $0 }
+        for song in songs {
+            songCache[song.id.rawValue] = song
+        }
+        return songs.map { song in
+            SiftSong(
+                libraryID: song.id.rawValue,
+                title: song.title,
+                artist: song.artistName,
+                album: song.albumTitle ?? "",
+                genre: song.genreName,
+                duration: song.duration ?? 0,
+                artwork: song.artwork
+            )
+        }
     }
 
     /// An artist's real photo from Apple's catalog, looked up by name -- for Auto-Sort's

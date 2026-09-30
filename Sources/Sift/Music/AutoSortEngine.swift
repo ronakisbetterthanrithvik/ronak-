@@ -32,8 +32,10 @@ enum AutoSortEngine {
         groups(from: songs, keysFor: { $0.artist.splitArtistCredits() }, minimumSongs: minimumSongs, defaultSelected: false)
     }
 
-    /// Builds a proposal from Claude's curated song selection for the Vibe tab -- the
-    /// same preview-track/gradient treatment as the Genre and Artist proposals above.
+    /// Builds a proposal from a curated song selection -- the same preview-track/gradient
+    /// treatment as the Genre and Artist proposals above. Used by Auto-Sort's Vibe tab
+    /// (`ClaudeVibeService`'s curated subset of the current playlist) and by the AI
+    /// Playlist Generator (`CatalogPlaylistGeneratorService`'s catalog-wide result) alike.
     static func vibeProposal(name: String, songs: [SiftSong]) -> ProposedPlaylist {
         ProposedPlaylist(
             name: name,

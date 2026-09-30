@@ -1,17 +1,14 @@
 import Foundation
 
 enum ClaudeVibeError: LocalizedError {
-    case network(Error)
-    case badStatus(Int, String)
+    case proxy(ClaudeProxyError)
     case unparsableResponse
     case noMatchingSongs
 
     var errorDescription: String? {
         switch self {
-        case .network(let error):
-            return "Couldn't reach Claude: \(error.localizedDescription)"
-        case .badStatus(let code, let message):
-            return "Claude API error (\(code)): \(message)"
+        case .proxy(let error):
+            return error.errorDescription
         case .unparsableResponse:
             return "Claude's response wasn't in the expected format. Try rephrasing your request."
         case .noMatchingSongs:
@@ -30,19 +27,9 @@ struct ClaudeVibeResult {
 /// Auto-Sort's Vibe tab. Nothing here is invented by Sift itself: Claude only ever picks
 /// from the exact songs it's given, never songs it makes up.
 ///
-/// This talks to Sift's own small proxy server (see `CloudflareWorker/vibe-proxy.js` in
-/// the repo), not Anthropic directly -- the proxy holds the real Anthropic API key
-/// privately server-side, so it's never shipped inside the app where anyone could
-/// extract it. Every person who downloads Sift shares that one server-side key; the
-/// proxy rate-limits per IP to keep any single client from burning through it.
+/// This only ever selects from the current playlist's own songs. For a playlist built
+/// from anywhere in Apple Music's catalog instead, see `CatalogPlaylistGeneratorService`.
 enum ClaudeVibeService {
-    /// Deployed `CloudflareWorker/vibe-proxy.js` -- see that file for what actually
-    /// handles the request (it holds the real Anthropic key, Sift never does).
-    private static let proxyEndpoint = URL(string: "https://sift-vibe-proxy.ronakvus.workers.dev")!
-    /// Must match `SIFT_CLIENT_HEADER_VALUE` in `CloudflareWorker/vibe-proxy.js` -- see
-    /// that file's security notes for what this header is (and isn't) protecting against.
-    private static let clientHeaderValue = "sift-macos-app-v1"
-
     static func curatePlaylist(request: String, from songs: [SiftSong]) async throws -> ClaudeVibeResult {
         let songList = songs
             .map { "\($0.libraryID)\t\($0.title) — \($0.artist) (\($0.genre))" }
@@ -71,48 +58,11 @@ enum ClaudeVibeService {
         \(songList)
         """
 
-        // No `model` field -- the proxy pins its own model server-side rather than
-        // trusting a client-supplied one.
-        let body = ClaudeRequest(
-            maxTokens: 8192,
-            system: systemPrompt,
-            messages: [.init(role: "user", content: userMessage)]
-        )
-
-        var urlRequest = URLRequest(url: proxyEndpoint)
-        urlRequest.httpMethod = "POST"
-        urlRequest.setValue(clientHeaderValue, forHTTPHeaderField: "X-Sift-Client")
-        urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
-        urlRequest.httpBody = try JSONEncoder().encode(body)
-        // URLSession's default request timeout is 60s -- too short for a large playlist.
-        // The song list sent as context scales with playlist size (1,000+ songs for a
-        // big one), and Claude's own processing time scales with it too, so this needs
-        // real headroom rather than the default.
-        urlRequest.timeoutInterval = 180
-
-        let data: Data
-        let response: URLResponse
+        let text: String
         do {
-            (data, response) = try await URLSession.shared.data(for: urlRequest)
-        } catch {
-            throw ClaudeVibeError.network(error)
-        }
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw ClaudeVibeError.unparsableResponse
-        }
-        guard httpResponse.statusCode == 200 else {
-            let message = (try? JSONDecoder().decode(ClaudeErrorEnvelope.self, from: data))?.error.message
-                ?? String(data: data, encoding: .utf8)
-                ?? "Unknown error"
-            throw ClaudeVibeError.badStatus(httpResponse.statusCode, message)
-        }
-
-        guard
-            let decoded = try? JSONDecoder().decode(ClaudeResponse.self, from: data),
-            let text = decoded.content.first(where: { $0.type == "text" })?.text
-        else {
-            throw ClaudeVibeError.unparsableResponse
+            text = try await ClaudeProxyClient.sendMessage(system: systemPrompt, userMessage: userMessage)
+        } catch let error as ClaudeProxyError {
+            throw ClaudeVibeError.proxy(error)
         }
 
         guard let curated = parseCuratedPlaylist(from: text) else {
@@ -126,17 +76,9 @@ enum ClaudeVibeService {
         return ClaudeVibeResult(name: curated.name, songLibraryIDs: matchedIDs)
     }
 
-    /// Claude is instructed to respond with only JSON, but strips a stray markdown code
-    /// fence defensively in case it wraps the response in one anyway.
     private static func parseCuratedPlaylist(from text: String) -> ClaudeVibeResult? {
-        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("```") {
-            trimmed = trimmed
-                .replacingOccurrences(of: "```json", with: "")
-                .replacingOccurrences(of: "```", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        guard let data = trimmed.data(using: .utf8) else { return nil }
+        let stripped = ClaudeProxyClient.stripMarkdownFence(from: text)
+        guard let data = stripped.data(using: .utf8) else { return nil }
         guard let raw = try? JSONDecoder().decode(RawCuratedPlaylist.self, from: data) else { return nil }
         return ClaudeVibeResult(name: raw.name, songLibraryIDs: raw.songLibraryIDs)
     }
@@ -145,37 +87,4 @@ enum ClaudeVibeService {
 private struct RawCuratedPlaylist: Decodable {
     let name: String
     let songLibraryIDs: [String]
-}
-
-private struct ClaudeRequest: Encodable {
-    let maxTokens: Int
-    let system: String
-    let messages: [ClaudeMessage]
-
-    enum CodingKeys: String, CodingKey {
-        case system, messages
-        case maxTokens = "max_tokens"
-    }
-}
-
-private struct ClaudeMessage: Encodable {
-    let role: String
-    let content: String
-}
-
-private struct ClaudeResponse: Decodable {
-    let content: [ClaudeContentBlock]
-}
-
-private struct ClaudeContentBlock: Decodable {
-    let type: String
-    let text: String?
-}
-
-private struct ClaudeErrorEnvelope: Decodable {
-    let error: ClaudeErrorDetail
-}
-
-private struct ClaudeErrorDetail: Decodable {
-    let message: String
 }
