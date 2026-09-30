@@ -84,6 +84,11 @@ enum ClaudeVibeService {
         urlRequest.setValue(clientHeaderValue, forHTTPHeaderField: "X-Sift-Client")
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
         urlRequest.httpBody = try JSONEncoder().encode(body)
+        // URLSession's default request timeout is 60s -- too short for a large playlist.
+        // The song list sent as context scales with playlist size (1,000+ songs for a
+        // big one), and Claude's own processing time scales with it too, so this needs
+        // real headroom rather than the default.
+        urlRequest.timeoutInterval = 180
 
         let data: Data
         let response: URLResponse
