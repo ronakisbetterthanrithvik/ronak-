@@ -13,8 +13,13 @@ struct ProposedPlaylistSongsView: View {
 
     /// The proposal's own songs, resolved from its library IDs and kept in the same
     /// order -- `ProposedPlaylist` only stores ids, not full `SiftSong`s.
+    ///
+    /// `Dictionary(_:uniquingKeysWith:)`, not `Dictionary(uniqueKeysWithValues:)` -- a
+    /// real Apple Music playlist can have the same song appear more than once, which
+    /// made the "unique keys" version crash outright (`Fatal error: Duplicate values
+    /// for key`) the moment a playlist with a repeated track was opened.
     private var songs: [SiftSong] {
-        let byID = Dictionary(uniqueKeysWithValues: allSongs.map { ($0.libraryID, $0) })
+        let byID = Dictionary(allSongs.map { ($0.libraryID, $0) }, uniquingKeysWith: { first, _ in first })
         return proposal.songLibraryIDs.compactMap { byID[$0] }
     }
 
