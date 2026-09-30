@@ -32,9 +32,19 @@ struct ProposedPlaylistCard: View {
             Text(proposal.name)
                 .font(.system(size: 15, weight: .semibold))
 
-            Text("\(proposal.songCount) songs · \(proposal.duration.asHoursMinutesString)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack {
+                Text("\(proposal.songCount) songs · \(proposal.duration.asHoursMinutesString)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                // Visual cue that tapping the card opens the full song list (`onOpen`) --
+                // purely decorative, the whole card already forwards its tap.
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
 
             Text(proposal.previewTracks.joined(separator: ", ") + "…")
                 .font(.caption)

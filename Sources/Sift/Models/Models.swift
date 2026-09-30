@@ -107,7 +107,7 @@ enum AutoSortMode: String, CaseIterable, Identifiable, Hashable {
         case .genre:
             return "Grouped by the genre metadata already on these songs. Most predictable, least novel."
         case .vibe:
-            return "Grouped by mood and energy — tempo, energy, and how you listen. Still in beta while we tune it."
+            return "Ask Vibe to create a new playlist based on artist, energy, mood, tempo, etc. Still in beta while we tune it."
         case .artist:
             return "Grouped by the artists you have the most songs from in this playlist."
         }
