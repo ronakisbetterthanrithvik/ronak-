@@ -116,10 +116,14 @@ enum AutoSortMode: String, CaseIterable, Identifiable, Hashable {
 
 struct ProposedPlaylist: Identifiable {
     let id = UUID()
-    let name: String
-    let songCount: Int
-    let duration: TimeInterval
-    let previewTracks: [String]
+    var name: String
+    /// These three are a cached summary of `songLibraryIDs`, not a separate source of
+    /// truth -- `var`, not `let`, because removing a song from the proposal (see
+    /// `ProposedPlaylistSongsView`) has to update them to match rather than leave a
+    /// stale count/duration/preview around.
+    var songCount: Int
+    var duration: TimeInterval
+    var previewTracks: [String]
     let gradient: [Color]
     /// Library IDs of the songs behind this proposal, used to actually create the
     /// playlist in Apple Music. Empty for demo data.

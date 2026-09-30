@@ -15,6 +15,10 @@ struct AutoSortView: View {
     @State private var isFetchingCatalogGenres = false
     @State private var catalogGenreError: String?
 
+    /// Index (within the current mode's `proposals`) of the proposal whose full song
+    /// list is being viewed/edited -- see `ProposedPlaylistSongsView`.
+    @State private var viewingIndex: Int?
+
     private let columns = [
         GridItem(.flexible(), spacing: 16),
         GridItem(.flexible(), spacing: 16),
@@ -74,7 +78,11 @@ struct AutoSortView: View {
                         } else {
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(proposals.indices, id: \.self) { index in
-                                    ProposedPlaylistCard(proposal: bindingForProposal(at: index), isArtist: mode == .artist)
+                                    ProposedPlaylistCard(
+                                        proposal: bindingForProposal(at: index),
+                                        isArtist: mode == .artist,
+                                        onOpen: { viewingIndex = index }
+                                    )
                                 }
                             }
                         }
@@ -89,6 +97,14 @@ struct AutoSortView: View {
         .frame(width: 760, height: 640)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .glassSurface(RoundedRectangle(cornerRadius: 20, style: .continuous), lineWidth: 1.25)
+        .sheet(isPresented: Binding(
+            get: { viewingIndex != nil },
+            set: { isPresented in if !isPresented { viewingIndex = nil } }
+        )) {
+            if let viewingIndex {
+                ProposedPlaylistSongsView(proposal: bindingForProposal(at: viewingIndex), allSongs: playlist.songs)
+            }
+        }
     }
 
     // MARK: - Vibe

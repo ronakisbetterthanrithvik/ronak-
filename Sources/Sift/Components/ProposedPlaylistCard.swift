@@ -6,6 +6,9 @@ struct ProposedPlaylistCard: View {
     /// Auto-Sort's Artist tab -- shows the artist's real Apple Music photo (circular,
     /// like Apple Music itself) instead of the generic gradient tile Genre/Vibe use.
     var isArtist: Bool = false
+    /// Tapping the card (anywhere but the checkbox, which keeps toggling selection)
+    /// opens the full song list for this proposal -- see `ProposedPlaylistSongsView`.
+    var onOpen: () -> Void = {}
 
     @State private var artistArtwork: Artwork?
 
@@ -47,6 +50,8 @@ struct ProposedPlaylistCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(proposal.isSelected ? Theme.accentPrimary.opacity(0.5) : Color.white.opacity(0.08), lineWidth: 1)
         )
+        .contentShape(Rectangle())
+        .onTapGesture { onOpen() }
     }
 
     @ViewBuilder
