@@ -1,7 +1,6 @@
 import Foundation
 
 enum ClaudeVibeError: LocalizedError {
-    case proxyNotConfigured
     case network(Error)
     case badStatus(Int, String)
     case unparsableResponse
@@ -9,8 +8,6 @@ enum ClaudeVibeError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .proxyNotConfigured:
-            return "Vibe isn't set up yet -- ClaudeVibeService.proxyEndpoint still has a placeholder URL."
         case .network(let error):
             return "Couldn't reach Claude: \(error.localizedDescription)"
         case .badStatus(let code, let message):
@@ -39,19 +36,14 @@ struct ClaudeVibeResult {
 /// extract it. Every person who downloads Sift shares that one server-side key; the
 /// proxy rate-limits per IP to keep any single client from burning through it.
 enum ClaudeVibeService {
-    /// Replace with your deployed Worker's own URL (looks like
-    /// "https://sift-vibe-proxy.<your-subdomain>.workers.dev") once you've deployed
-    /// `CloudflareWorker/vibe-proxy.js`.
-    private static let proxyEndpoint = URL(string: "https://REPLACE-WITH-YOUR-WORKER-URL.workers.dev")!
+    /// Deployed `CloudflareWorker/vibe-proxy.js` -- see that file for what actually
+    /// handles the request (it holds the real Anthropic key, Sift never does).
+    private static let proxyEndpoint = URL(string: "https://sift-vibe-proxy.ronakvus.workers.dev")!
     /// Must match `SIFT_CLIENT_HEADER_VALUE` in `CloudflareWorker/vibe-proxy.js` -- see
     /// that file's security notes for what this header is (and isn't) protecting against.
     private static let clientHeaderValue = "sift-macos-app-v1"
 
     static func curatePlaylist(request: String, from songs: [SiftSong]) async throws -> ClaudeVibeResult {
-        guard proxyEndpoint.host != "REPLACE-WITH-YOUR-WORKER-URL.workers.dev" else {
-            throw ClaudeVibeError.proxyNotConfigured
-        }
-
         let songList = songs
             .map { "\($0.libraryID)\t\($0.title) — \($0.artist) (\($0.genre))" }
             .joined(separator: "\n")
