@@ -28,7 +28,9 @@ struct PlaylistPickerView: View {
 
     /// How many tiles show on either side of the selected one before they're clipped off.
     private let sideWindow = 2
-    private let tileSpacing: CGFloat = 190
+    /// The visual gap between adjacent tiles' edges -- see `xOffset(for:)` for why this
+    /// replaces a flat spacing constant between tile *centers*.
+    private let tileGap: CGFloat = 28
 
     var body: some View {
         ZStack {
@@ -119,12 +121,45 @@ struct PlaylistPickerView: View {
         }
     }
 
+    /// A tile's width at a given distance from the selected (centered) one -- shared
+    /// with `xOffset(for:)`, which needs every tile's size, not just the one it's
+    /// currently placing, to space edges (not centers) evenly.
+    private func tileSize(atDistance distance: Int) -> CGFloat {
+        distance == 0 ? 220 : (distance == 1 ? 160 : 108)
+    }
+
+    /// Where a tile at `offset` steps from the selected one sits horizontally.
+    ///
+    /// Tiles shrink the farther they are from center (`tileSize(atDistance:)`), but the
+    /// old version of this spaced every tile's *center* by the same flat distance
+    /// regardless of that -- which, since two differently-sized tiles' edges aren't the
+    /// same distance from their centers, produced inconsistent, sometimes near-zero,
+    /// sometimes oddly wide gaps between adjacent tiles depending on which sizes happened
+    /// to be next to each other. This instead walks outward from the center tile one step
+    /// at a time, adding each pair's own two half-widths plus a fixed `tileGap`, so the
+    /// visual gap between every adjacent pair of tile *edges* is the same regardless of
+    /// their sizes.
+    private func xOffset(for offset: Int) -> CGFloat {
+        guard offset != 0 else { return 0 }
+        let step = offset > 0 ? 1 : -1
+        var position: CGFloat = 0
+        var previousSize = tileSize(atDistance: 0)
+        var current = 0
+        while current != offset {
+            current += step
+            let currentSize = tileSize(atDistance: abs(current))
+            position += CGFloat(step) * (previousSize / 2 + currentSize / 2 + tileGap)
+            previousSize = currentSize
+        }
+        return position
+    }
+
     private func tile(for item: PickablePlaylist, offset: Int) -> some View {
         let isSelected = offset == 0
         let distance = abs(offset)
-        let size: CGFloat = isSelected ? 220 : (distance == 1 ? 160 : 108)
+        let size = tileSize(atDistance: distance)
         let dimOpacity = isSelected ? 1.0 : (distance == 1 ? 0.55 : 0.26)
-        let xOffset = CGFloat(offset) * tileSpacing + dragTranslation
+        let xPosition = xOffset(for: offset) + dragTranslation
 
         return VStack(spacing: 10) {
             artwork(for: item, size: size)
@@ -139,7 +174,7 @@ struct PlaylistPickerView: View {
             }
         }
         .opacity(dimOpacity)
-        .offset(x: xOffset)
+        .offset(x: xPosition)
         .zIndex(isSelected ? 1 : 0)
         .onTapGesture {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
