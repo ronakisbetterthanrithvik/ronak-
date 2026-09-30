@@ -103,7 +103,6 @@ struct PlaylistPickerView: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Theme.accentGradient))
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
@@ -116,7 +115,7 @@ struct PlaylistPickerView: View {
                                 .font(.system(size: 9, weight: .bold))
                                 .tracking(0.5)
                         }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.black)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(Theme.accentGradient))
