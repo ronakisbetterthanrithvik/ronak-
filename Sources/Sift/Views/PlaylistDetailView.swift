@@ -736,16 +736,7 @@ struct PlaylistDetailView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isNowPlaying ? Theme.accentPrimary.opacity(0.16) : Color.clear)
         )
-        // A plain static stroke instead of `.glassEdge` -- that modifier's cursor-reactive
-        // rim runs a `GeometryReader` plus `onContinuousHover` tracking on every row, which
-        // visibly lagged scrolling once a track list had hundreds of rows. A long track
-        // list is exactly the case `glassEdge` itself already wasn't built for, so this row
-        // alone drops the reactive highlight; every other glass surface in the app (Auto-
-        // Sort, Smart Control, etc.) keeps the real `glassEdge`/`glassSurface` look.
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.white.opacity(isNowPlaying ? 0.4 : 0.22), lineWidth: 0.75)
-        )
+        .glassEdge(RoundedRectangle(cornerRadius: 10, style: .continuous), lineWidth: 0.75, baseOpacity: isNowPlaying ? 0.4 : 0.22)
     }
 
     @ViewBuilder
