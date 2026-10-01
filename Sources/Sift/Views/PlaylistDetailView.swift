@@ -9,17 +9,21 @@ private enum Stage {
 }
 
 struct PlaylistDetailView: View {
-    #if DEBUG
-    /// Temporary diagnostic counter for the track-list scrolling-lag investigation --
-    /// see the prints in `body` and `trackRow`. Remove once the real cause is found.
-    static var trackRowBuildCount = 0
-    #endif
-
     @StateObject private var auth = MusicAuthorizationService.shared
     @StateObject private var playback = PlaybackService.shared
 
     @State private var stage: Stage = .connecting
     @State private var isDemoMode = true
+
+    /// Every loaded song's artwork, already fetched and decoded, keyed by `libraryID`.
+    /// Filled in the background (not awaited) once a playlist opens -- see
+    /// `prefetchArtwork` -- so rows can render straight from an already-decoded
+    /// `NSImage` once warmed, instead of going through MusicKit's own `ArtworkImage`,
+    /// which flashes its own placeholder color while loading. Fast scrolling constantly
+    /// destroys and recreates rows, so without this cache every newly-built row with a
+    /// not-yet-finished `ArtworkImage` shows that flash from scratch. Cleared at the
+    /// start of each new playlist load.
+    @State private var prefetchedArtwork: [String: NSImage] = [:]
 
     @State private var libraryPlaylists: [LibraryPlaylistSummary] = []
     @State private var isLoadingLibrary = false
@@ -59,15 +63,7 @@ struct PlaylistDetailView: View {
     }
 
     var body: some View {
-        #if DEBUG
-        // Temporary diagnostic for the track-list scrolling lag -- prints which @State/
-        // @StateObject property caused this view's body to re-run, and how often, so we
-        // can tell a genuine per-row re-render storm apart from something else entirely
-        // (Instruments isn't available in this remote setup, so this is the next best
-        // signal). Remove once the real cause is found.
-        Self._printChanges()
-        #endif
-        return ZStack {
+        ZStack {
             Group {
                 switch stage {
                 case .connecting:
@@ -249,6 +245,7 @@ struct PlaylistDetailView: View {
         Task {
             isLoadingLibrary = true
             libraryError = nil
+            prefetchedArtwork = [:]
             do {
                 let loaded = try await MusicLibraryService.shared.loadPlaylist(id: summary.id)
                 playlist = loaded
@@ -260,10 +257,46 @@ struct PlaylistDetailView: View {
                 ]
                 isDemoMode = false
                 stage = .ready
+                Task { await prefetchArtwork(for: loaded.songs) }
             } catch {
                 libraryError = error.localizedDescription
                 isLoadingLibrary = false
             }
+        }
+    }
+
+    /// Fetches and decodes every song's artwork via MusicKit's `Artwork.url(width:height:)`
+    /// (the real CDN URL, not `ArtworkImage`), in small concurrent batches -- fire-and-
+    /// forget in the background, never awaited before `stage` flips to `.ready`, so it
+    /// can't slow down opening a playlist the way awaiting it once did. It just
+    /// gradually warms `prefetchedArtwork` while the list is already on screen, so rows
+    /// stop flashing `ArtworkImage`'s loading placeholder once an image lands in the
+    /// cache -- most noticeable on a fast scroll, which destroys and recreates rows
+    /// faster than `ArtworkImage` alone can keep up with.
+    private func prefetchArtwork(for songs: [SiftSong]) async {
+        let chunkSize = 16
+        var index = 0
+        while index < songs.count {
+            let chunk = songs[index..<min(index + chunkSize, songs.count)]
+            await withTaskGroup(of: (String, NSImage?).self) { group in
+                for song in chunk {
+                    group.addTask {
+                        guard let artwork = song.artwork, let url = artwork.url(width: 160, height: 160) else {
+                            return (song.libraryID, nil)
+                        }
+                        guard let (data, _) = try? await URLSession.shared.data(from: url) else {
+                            return (song.libraryID, nil)
+                        }
+                        return (song.libraryID, NSImage(data: data))
+                    }
+                }
+                for await (libraryID, image) in group {
+                    if let image {
+                        prefetchedArtwork[libraryID] = image
+                    }
+                }
+            }
+            index += chunkSize
         }
     }
 
@@ -275,6 +308,7 @@ struct PlaylistDetailView: View {
         Task {
             isLoadingLibrary = true
             libraryError = nil
+            prefetchedArtwork = [:]
             let songs = await MusicLibraryService.shared.resolveSongs(forLibraryIDs: owned.songLibraryIDs)
             guard !songs.isEmpty else {
                 libraryError = "None of those songs were found in your library anymore."
@@ -313,6 +347,7 @@ struct PlaylistDetailView: View {
             ]
             isDemoMode = false
             stage = .ready
+            Task { await prefetchArtwork(for: songs) }
         }
     }
 
@@ -705,16 +740,7 @@ struct PlaylistDetailView: View {
     }
 
     private func trackRow(song: SiftSong, index: Int, isNowPlaying: Bool) -> some View {
-        #if DEBUG
-        // Temporary diagnostic alongside the one in `body` -- counts how many times a
-        // row actually gets (re)built while scrolling, so we can compare that against how
-        // many rows are ever visible at once. Remove once the real cause is found.
-        Self.trackRowBuildCount += 1
-        if Self.trackRowBuildCount % 20 == 0 {
-            print("Sift DEBUG: trackRow built \(Self.trackRowBuildCount) times so far (just built row \(index): \(song.title))")
-        }
-        #endif
-        return HStack(spacing: 12) {
+        HStack(spacing: 12) {
             rowArtwork(for: song, size: 40)
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
@@ -772,7 +798,15 @@ struct PlaylistDetailView: View {
 
     @ViewBuilder
     private func rowArtwork(for song: SiftSong, size: CGFloat) -> some View {
-        if let artwork = song.artwork {
+        if let cached = prefetchedArtwork[song.libraryID] {
+            // Already a plain decoded NSImage -- no MusicKit ArtworkImage loading
+            // happening here, so no placeholder-color flash possible for this row.
+            Image(nsImage: cached)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipped()
+        } else if let artwork = song.artwork {
             squareArtwork(artwork, size: size)
         } else {
             rowArtworkPlaceholder.frame(width: size, height: size)
