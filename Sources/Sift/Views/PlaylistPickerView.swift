@@ -43,7 +43,7 @@ struct PlaylistPickerView: View {
                 header
                 aiGeneratorBanner
 
-                if isLoading {
+                if isLoading || !allCoversReady {
                     Spacer()
                     ProgressView("Loading your playlists…")
                         .frame(maxWidth: .infinity)
@@ -85,8 +85,48 @@ struct PlaylistPickerView: View {
             }
         }
         .onChange(of: playlists) { _ in selectedIndex = 0 }
+        .task(id: playlists.map(\.id)) { await prefetchAllCovers() }
         .sheet(isPresented: $showAIGenerator) {
             AIPlaylistGeneratorView()
+        }
+    }
+
+    /// Whether every playlist that actually needs an async-loaded cover (see
+    /// `needsAsyncCover`) already has one in `covers` -- the carousel stays behind the
+    /// loading spinner until this is true, so nobody ever sees `artworkPlaceholder`
+    /// appear then get swapped out once a cover loads in.
+    private var allCoversReady: Bool {
+        playlists.allSatisfy { !needsAsyncCover($0) || covers[$0.id] != nil }
+    }
+
+    /// A Sift-only playlist with a custom cover already picked renders it straight from
+    /// disk, synchronously -- no network/catalog lookup, so it never needs an entry in
+    /// `covers` to be "ready". Everything else (a real library playlist, or a Sift
+    /// playlist without a custom cover) does.
+    private func needsAsyncCover(_ item: PickablePlaylist) -> Bool {
+        if case .sift(let owned) = item, SiftPlaylistStore.shared.coverImage(for: owned) != nil {
+            return false
+        }
+        return true
+    }
+
+    /// Loads every playlist's cover concurrently before the carousel is ever shown --
+    /// see `allCoversReady`. `loadCover`/`loadSiftMosaic` each already guard against
+    /// re-fetching something already in `covers`, so this is cheap to re-run (via the
+    /// `.task(id:)` above) whenever the playlist list itself changes, e.g. a new one
+    /// gets created.
+    private func prefetchAllCovers() async {
+        await withTaskGroup(of: Void.self) { group in
+            for item in playlists where needsAsyncCover(item) {
+                group.addTask {
+                    switch item {
+                    case .library(let summary):
+                        await loadCover(for: summary)
+                    case .sift(let owned):
+                        await loadSiftMosaic(owned: owned, key: item.id)
+                    }
+                }
+            }
         }
     }
 
