@@ -676,7 +676,15 @@ struct PlaylistDetailView: View {
             }
         }
         .padding(16)
-        .glassSurface(RoundedRectangle(cornerRadius: 16, style: .continuous), lineWidth: 1.25)
+        // Plain static background instead of `.glassSurface` -- that modifier's real-time
+        // `.ultraThinMaterial` blur plus its GeometryReader/onContinuousHover-tracked edge
+        // wrap this ENTIRE container (header + every row combined), so on a long playlist
+        // its effective height is the whole list's height, not just what's on screen.
+        // Every per-row test so far (the row border, then pre-decoding every image) made
+        // zero difference, which points at this one outer surface -- sized to the full
+        // list -- as the actual cost, not anything inside an individual row.
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.03)))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1.25))
     }
 
     private var trackListHeader: some View {
