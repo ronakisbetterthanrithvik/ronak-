@@ -11,6 +11,27 @@ struct PlaylistPickerView: View {
     @State private var selectedIndex = 0
     @State private var dragTranslation: CGFloat = 0
 
+    /// A manually-dragged display order, persisted across launches -- see
+    /// `syncCustomOrder`/`orderedPlaylists`. This only ever changes how Sift *displays*
+    /// the carousel; it can't reorder a real Apple Music library playlist in Apple Music
+    /// itself (MusicKit has no API for that), so a mixed drag between Sift-made and
+    /// library playlists is still just a Sift-side display order, same as either alone.
+    @State private var customOrderIDs: [String] = []
+    private let customOrderDefaultsKey = "sift.carouselOrder"
+
+    /// iOS-style "jiggle mode" -- long-press a tile to enter it, drag the centered tile
+    /// past a neighbor to swap places with it, tap anywhere to leave.
+    @State private var isRearranging = false
+    /// How far the centered tile has been dragged from rest while rearranging -- distinct
+    /// from `dragTranslation`, which instead pages between playlists outside rearrange
+    /// mode. Only the centered tile moves by this; its neighbors hold still until a swap
+    /// happens (see `attemptReorderSwap`).
+    @State private var reorderOffset: CGFloat = 0
+    /// Flips back and forth forever while rearranging to drive the jiggle -- combined
+    /// with each tile's own offset parity (see `tile(for:offset:)`) so neighboring tiles
+    /// rock in opposite directions instead of in lockstep.
+    @State private var jigglePhase = false
+
     private enum Cover {
         case single(Artwork)
         case mosaic([Artwork])
@@ -75,20 +96,112 @@ struct PlaylistPickerView: View {
                 } else {
                     Spacer()
                     carousel
-                    arrows
+                    if !isRearranging {
+                        arrows
+                    }
                     Spacer()
-                    Text("Pick a playlist to open -- your Apple Music library, or one Sift created.")
+                    Text(isRearranging
+                        ? "Drag a tile to reorder -- tap anywhere to finish"
+                        : "Pick a playlist to open -- your Apple Music library, or one Sift created.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .padding(.bottom, 36)
                 }
             }
         }
-        .onChange(of: playlists) { _ in selectedIndex = 0 }
+        .onAppear { loadCustomOrder(); syncCustomOrder() }
+        .onChange(of: playlists) { _ in selectedIndex = 0; syncCustomOrder() }
         .task(id: playlists.map(\.id)) { await prefetchAllCovers() }
         .sheet(isPresented: $showAIGenerator) {
             AIPlaylistGeneratorView()
         }
+    }
+
+    // MARK: - Reordering
+
+    /// The carousel's actual display order -- `playlists` reordered to match
+    /// `customOrderIDs`. Built with `Dictionary(_:uniquingKeysWith:)`, not
+    /// `uniqueKeysValues:`, the same defensive pattern used for a real Apple Music
+    /// playlist's songs elsewhere -- a duplicate id here would otherwise crash outright.
+    private var orderedPlaylists: [PickablePlaylist] {
+        let byID = Dictionary(playlists.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return customOrderIDs.compactMap { byID[$0] }
+    }
+
+    private func loadCustomOrder() {
+        guard customOrderIDs.isEmpty,
+              let saved = UserDefaults.standard.array(forKey: customOrderDefaultsKey) as? [String]
+        else { return }
+        customOrderIDs = saved
+    }
+
+    private func saveCustomOrder() {
+        UserDefaults.standard.set(customOrderIDs, forKey: customOrderDefaultsKey)
+    }
+
+    /// Keeps `customOrderIDs` in step with `playlists` -- drops any id that no longer
+    /// exists (a deleted playlist), and appends anything new (a playlist just created, or
+    /// the very first time this ever runs) in its original relative order at the end.
+    private func syncCustomOrder() {
+        let currentIDs = Set(playlists.map(\.id))
+        var next = customOrderIDs.filter { currentIDs.contains($0) }
+        let known = Set(next)
+        for item in playlists where !known.contains(item.id) {
+            next.append(item.id)
+        }
+        guard next != customOrderIDs else { return }
+        customOrderIDs = next
+        saveCustomOrder()
+    }
+
+    /// Enters jiggle mode on the tile at `index`, centering it first so the drag gesture
+    /// (which only ever moves the centered tile -- see `tile(for:offset:)`) has something
+    /// to act on.
+    private func beginRearranging(at index: Int) {
+        guard !isRearranging else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            selectedIndex = index
+            isRearranging = true
+        }
+        withAnimation(.easeInOut(duration: 0.14).repeatForever(autoreverses: true)) {
+            jigglePhase.toggle()
+        }
+    }
+
+    private func endRearranging() {
+        guard isRearranging else { return }
+        withAnimation(.easeOut(duration: 0.2)) {
+            isRearranging = false
+            reorderOffset = 0
+            jigglePhase = false
+        }
+    }
+
+    /// Swaps the centered tile past a neighbor once it's been dragged more than half the
+    /// gap between their centers -- `while`, not `if`, so a single fast/long drag can
+    /// chain through several swaps in one continuous gesture, the same way iOS lets you
+    /// drag an icon straight across several others at once.
+    private func attemptReorderSwap() {
+        let gap = xOffset(for: 1)
+        guard gap > 0 else { return }
+        while reorderOffset > gap / 2, selectedIndex + 1 < orderedPlaylists.count {
+            swapOrder(selectedIndex, selectedIndex + 1)
+            selectedIndex += 1
+            reorderOffset -= gap
+        }
+        while reorderOffset < -gap / 2, selectedIndex > 0 {
+            swapOrder(selectedIndex, selectedIndex - 1)
+            selectedIndex -= 1
+            reorderOffset += gap
+        }
+    }
+
+    private func swapOrder(_ a: Int, _ b: Int) {
+        guard customOrderIDs.indices.contains(a), customOrderIDs.indices.contains(b) else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            customOrderIDs.swapAt(a, b)
+        }
+        saveCustomOrder()
     }
 
     /// Whether every playlist that actually needs an async-loaded cover (see
@@ -201,19 +314,20 @@ struct PlaylistPickerView: View {
     private var carousel: some View {
         ZStack {
             ForEach(visibleIndices, id: \.self) { index in
-                tile(for: playlists[index], offset: index - selectedIndex)
+                tile(for: orderedPlaylists[index], offset: index - selectedIndex)
             }
         }
         .frame(height: 260)
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
-        .gesture(dragGesture)
+        .gesture(carouselDragGesture)
+        .onTapGesture { endRearranging() }
     }
 
     private var visibleIndices: [Int] {
         (-sideWindow...sideWindow).compactMap { delta in
             let index = selectedIndex + delta
-            return playlists.indices.contains(index) ? index : nil
+            return orderedPlaylists.indices.contains(index) ? index : nil
         }
     }
 
@@ -255,7 +369,15 @@ struct PlaylistPickerView: View {
         let distance = abs(offset)
         let size = tileSize(atDistance: distance)
         let dimOpacity = isSelected ? 1.0 : (distance == 1 ? 0.55 : 0.26)
-        let xPosition = xOffset(for: offset) + dragTranslation
+        // While rearranging, only the centered tile (the one being dragged) moves with
+        // the finger -- every neighbor holds its normal position until a swap actually
+        // happens, at which point it becomes the new centered tile and picks up this
+        // same offset itself. Outside rearrange mode this is the original paging drag,
+        // applied to every tile alike so the whole carousel visibly slides together.
+        let xPosition = xOffset(for: offset) + (isRearranging ? (isSelected ? reorderOffset : 0) : dragTranslation)
+        // Alternates sign by offset parity so adjacent tiles rock opposite ways, like iOS
+        // -- `jigglePhase` itself just flips back and forth forever to drive the timing.
+        let jiggleAngle: Double = ((offset % 2 == 0) == jigglePhase) ? 1.6 : -1.6
 
         return VStack(spacing: 10) {
             artwork(for: item, size: size)
@@ -271,26 +393,49 @@ struct PlaylistPickerView: View {
         }
         .opacity(dimOpacity)
         .offset(x: xPosition)
+        .rotationEffect(.degrees(isRearranging ? jiggleAngle : 0))
         .zIndex(isSelected ? 1 : 0)
         .onTapGesture {
+            if isRearranging {
+                endRearranging()
+                return
+            }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 if isSelected {
                     onSelect(item)
-                } else if let tappedIndex = playlists.firstIndex(where: { $0.id == item.id }) {
+                } else if let tappedIndex = orderedPlaylists.firstIndex(where: { $0.id == item.id }) {
                     selectedIndex = tappedIndex
                 }
             }
         }
+        .onLongPressGesture(minimumDuration: 0.45) {
+            if let tappedIndex = orderedPlaylists.firstIndex(where: { $0.id == item.id }) {
+                beginRearranging(at: tappedIndex)
+            }
+        }
     }
 
-    private var dragGesture: some Gesture {
+    private var carouselDragGesture: some Gesture {
         DragGesture()
-            .onChanged { value in dragTranslation = value.translation.width }
+            .onChanged { value in
+                if isRearranging {
+                    reorderOffset = value.translation.width
+                    attemptReorderSwap()
+                } else {
+                    dragTranslation = value.translation.width
+                }
+            }
             .onEnded { value in
+                if isRearranging {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        reorderOffset = 0
+                    }
+                    return
+                }
                 let threshold: CGFloat = 60
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     if value.translation.width < -threshold {
-                        selectedIndex = min(selectedIndex + 1, playlists.count - 1)
+                        selectedIndex = min(selectedIndex + 1, orderedPlaylists.count - 1)
                     } else if value.translation.width > threshold {
                         selectedIndex = max(selectedIndex - 1, 0)
                     }
@@ -406,8 +551,8 @@ struct PlaylistPickerView: View {
             arrowButton(systemName: "chevron.left", disabled: selectedIndex == 0) {
                 selectedIndex = max(selectedIndex - 1, 0)
             }
-            arrowButton(systemName: "chevron.right", disabled: selectedIndex >= playlists.count - 1) {
-                selectedIndex = min(selectedIndex + 1, playlists.count - 1)
+            arrowButton(systemName: "chevron.right", disabled: selectedIndex >= orderedPlaylists.count - 1) {
+                selectedIndex = min(selectedIndex + 1, orderedPlaylists.count - 1)
             }
         }
     }
