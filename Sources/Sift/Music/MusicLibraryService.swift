@@ -522,7 +522,13 @@ final class MusicLibraryService {
             return matched.artwork
         } catch {
             print("Sift DEBUG: lookupArtistArtwork — search failed for \"\(name)\" — \(error)")
-            artistArtworkCache.updateValue(nil, forKey: name)
+            // Deliberately NOT cached, unlike the two cases above -- those are genuine
+            // facts (no artist matched, or the matched artist truly has no artwork) that
+            // won't change on a retry. A failure here (a network timeout under load, say)
+            // is transient, and after already retrying 3 times via `withRetries`, caching
+            // it as a permanent "no artwork" would mean an artist that happened to time
+            // out once stays blank for the rest of the session even on reopening this
+            // same tab -- leaving the cache untouched lets a later call retry for real.
             return nil
         }
     }
