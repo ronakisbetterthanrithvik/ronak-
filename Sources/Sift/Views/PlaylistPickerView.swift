@@ -22,18 +22,19 @@ struct PlaylistPickerView: View {
     /// tile past a neighbor swaps places with it, and the checkmark button (or tapping
     /// anywhere) saves and leaves.
     @State private var isRearranging = false
-    /// How far the centered tile has been dragged from rest while rearranging -- only the
-    /// centered tile moves by this; its neighbors hold still until a swap happens (see
-    /// `attemptReorderSwap`). The carousel has no other drag behavior -- paging is
-    /// arrow-buttons-only (see `arrows`).
+    /// The centered tile's visual offset from rest while rearranging -- always exactly
+    /// the drag's raw `value.translation.width`, so the tile tracks the cursor 1:1 with
+    /// zero jumps from the moment it's grabbed until release, the same as dragging an
+    /// icon on iOS. Only the centered tile moves by this; its neighbors hold still until
+    /// a swap happens (see `attemptReorderSwap`). The carousel has no other drag
+    /// behavior -- paging is arrow-buttons-only (see `arrows`).
     @State private var reorderOffset: CGFloat = 0
-    /// How much of the current drag's raw translation has already been "spent" on a
-    /// swap -- `DragGesture`'s `value.translation` is always measured from wherever the
-    /// drag started, never resetting on its own, so `reorderOffset` has to be rederived
-    /// as `translation - consumedTranslation` on every change. Without that, the very
-    /// next pixel of movement after a swap would overwrite `reorderOffset` back to the
-    /// full un-adjusted translation, undoing the swap's own `-= gap` the instant the
-    /// cursor moved again -- which is why swapping past a neighbor never actually stuck.
+    /// Where `reorderOffset` was sitting at the last swap -- `attemptReorderSwap` checks
+    /// `reorderOffset - consumedTranslation` against the gap threshold to decide whether
+    /// another swap is due, without ever touching `reorderOffset` itself. Keeping these
+    /// separate is what lets the tile's on-screen position stay a pure, unbroken mirror
+    /// of the cursor while the swap bookkeeping tracks "distance since the last swap"
+    /// independently alongside it.
     @State private var consumedTranslation: CGFloat = 0
     /// Flips back and forth forever while rearranging to drive the jiggle -- combined
     /// with each tile's own offset parity (see `tile(for:offset:)`) so neighboring tiles
@@ -241,17 +242,18 @@ struct PlaylistPickerView: View {
         }
         let gap = xOffset(for: 1)
         guard gap > 0 else { return }
-        while reorderOffset > gap / 2, selectedIndex + 1 < orderedPlaylists.count {
+        // `reorderOffset` itself is never touched here -- it's the tile's actual on-
+        // screen position and has to stay a pure mirror of the cursor. Only
+        // `consumedTranslation` (the swap bookkeeping) moves.
+        while reorderOffset - consumedTranslation > gap / 2, selectedIndex + 1 < orderedPlaylists.count {
             swapOrder(selectedIndex, selectedIndex + 1)
             selectedIndex += 1
             consumedTranslation += gap
-            reorderOffset -= gap
         }
-        while reorderOffset < -gap / 2, selectedIndex > 0 {
+        while reorderOffset - consumedTranslation < -gap / 2, selectedIndex > 0 {
             swapOrder(selectedIndex, selectedIndex - 1)
             selectedIndex -= 1
             consumedTranslation -= gap
-            reorderOffset += gap
         }
     }
 
@@ -497,13 +499,12 @@ struct PlaylistPickerView: View {
                         beginRearranging(at: tappedIndex)
                     }
                     guard isSelected else { return }
-                    // `value.translation` is always measured from where this drag
-                    // started, never resetting on its own -- subtracting
-                    // `consumedTranslation` (the part already "spent" on prior swaps
-                    // this same drag) is what keeps reorderOffset meaning "distance
-                    // since the last swap" instead of snapping back to the full
-                    // translation the instant the cursor moves again.
-                    reorderOffset = value.translation.width - consumedTranslation
+                    // Always the raw translation, never adjusted -- this is what keeps
+                    // the tile locked exactly to the cursor for the whole drag. The swap
+                    // threshold math in attemptReorderSwap tracks "distance since the
+                    // last swap" separately (via consumedTranslation) instead of
+                    // reaching back into this value.
+                    reorderOffset = value.translation.width
                     attemptReorderSwap()
                 }
                 .onEnded { _ in
