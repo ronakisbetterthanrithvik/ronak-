@@ -180,6 +180,7 @@ struct PlaylistPickerView: View {
     /// to act on.
     private func beginRearranging(at index: Int) {
         guard !isRearranging else { return }
+        print("Sift DEBUG: beginRearranging at index \(index) (\(orderedPlaylists.indices.contains(index) ? orderedPlaylists[index].name : "?"))")
         consumedTranslation = 0
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             selectedIndex = index
@@ -217,14 +218,19 @@ struct PlaylistPickerView: View {
     /// drag an icon straight across several others at once.
     private func attemptReorderSwap() {
         let gap = xOffset(for: 1)
-        guard gap > 0 else { return }
+        guard gap > 0 else {
+            print("Sift DEBUG: attemptReorderSwap — gap is \(gap), bailing")
+            return
+        }
         while reorderOffset > gap / 2, selectedIndex + 1 < orderedPlaylists.count {
+            print("Sift DEBUG: swap right -- reorderOffset=\(reorderOffset) gap=\(gap) selectedIndex=\(selectedIndex)")
             swapOrder(selectedIndex, selectedIndex + 1)
             selectedIndex += 1
             consumedTranslation += gap
             reorderOffset -= gap
         }
         while reorderOffset < -gap / 2, selectedIndex > 0 {
+            print("Sift DEBUG: swap left -- reorderOffset=\(reorderOffset) gap=\(gap) selectedIndex=\(selectedIndex)")
             swapOrder(selectedIndex, selectedIndex - 1)
             selectedIndex -= 1
             consumedTranslation -= gap
@@ -233,7 +239,11 @@ struct PlaylistPickerView: View {
     }
 
     private func swapOrder(_ a: Int, _ b: Int) {
-        guard customOrderIDs.indices.contains(a), customOrderIDs.indices.contains(b) else { return }
+        guard customOrderIDs.indices.contains(a), customOrderIDs.indices.contains(b) else {
+            print("Sift DEBUG: swapOrder — index out of bounds a=\(a) b=\(b) count=\(customOrderIDs.count)")
+            return
+        }
+        print("Sift DEBUG: swapOrder — swapping \(a) (\(customOrderIDs[a])) and \(b) (\(customOrderIDs[b]))")
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             customOrderIDs.swapAt(a, b)
         }
@@ -466,10 +476,14 @@ struct PlaylistPickerView: View {
         .gesture(
             DragGesture(minimumDistance: 2)
                 .onChanged { value in
+                    print("Sift DEBUG: tile onChanged — item=\(item.name) isSelected=\(isSelected) isRearranging=\(isRearranging) translation=\(value.translation.width)")
                     if !isRearranging, let tappedIndex = orderedPlaylists.firstIndex(where: { $0.id == item.id }) {
                         beginRearranging(at: tappedIndex)
                     }
-                    guard isSelected else { return }
+                    guard isSelected else {
+                        print("Sift DEBUG: tile onChanged — item=\(item.name) is NOT selected, ignoring drag")
+                        return
+                    }
                     // `value.translation` is always measured from where this drag
                     // started, never resetting on its own -- subtracting
                     // `consumedTranslation` (the part already "spent" on prior swaps
@@ -480,6 +494,7 @@ struct PlaylistPickerView: View {
                     attemptReorderSwap()
                 }
                 .onEnded { _ in
+                    print("Sift DEBUG: tile onEnded — item=\(item.name) isSelected=\(isSelected)")
                     guard isSelected else { return }
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                         reorderOffset = 0
