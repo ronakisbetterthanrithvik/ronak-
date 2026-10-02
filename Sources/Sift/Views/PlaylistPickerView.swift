@@ -119,8 +119,18 @@ struct PlaylistPickerView: View {
                 }
             }
         }
-        .onAppear { loadCustomOrder(); syncCustomOrder() }
-        .onChange(of: playlists) { _ in selectedIndex = 0; syncCustomOrder() }
+        .onAppear {
+            print("Sift DEBUG: onAppear -- playlists.count=\(playlists.count) customOrderIDs.count(before)=\(customOrderIDs.count)")
+            loadCustomOrder()
+            syncCustomOrder()
+            print("Sift DEBUG: onAppear -- customOrderIDs.count(after)=\(customOrderIDs.count)")
+        }
+        .onChange(of: playlists) { newValue in
+            print("Sift DEBUG: onChange(playlists) -- newValue.count=\(newValue.count) customOrderIDs.count(before)=\(customOrderIDs.count)")
+            selectedIndex = 0
+            syncCustomOrder()
+            print("Sift DEBUG: onChange(playlists) -- customOrderIDs.count(after)=\(customOrderIDs.count)")
+        }
         .task(id: playlists.map(\.id)) { await prefetchAllCovers() }
         .sheet(isPresented: $showAIGenerator) {
             AIPlaylistGeneratorView()
@@ -163,14 +173,21 @@ struct PlaylistPickerView: View {
         // state here, not a real "no playlists" fact (that case is handled elsewhere in
         // `body`), and syncing against it would wipe any real saved order down to `[]`
         // and persist that wipe, permanently losing it.
-        guard !playlists.isEmpty else { return }
+        guard !playlists.isEmpty else {
+            print("Sift DEBUG: syncCustomOrder -- playlists is empty, skipping")
+            return
+        }
         let currentIDs = Set(playlists.map(\.id))
         var next = customOrderIDs.filter { currentIDs.contains($0) }
         let known = Set(next)
         for item in playlists where !known.contains(item.id) {
             next.append(item.id)
         }
-        guard next != customOrderIDs else { return }
+        guard next != customOrderIDs else {
+            print("Sift DEBUG: syncCustomOrder -- next == customOrderIDs (count=\(customOrderIDs.count)), no-op")
+            return
+        }
+        print("Sift DEBUG: syncCustomOrder -- updating customOrderIDs \(customOrderIDs.count) -> \(next.count)")
         customOrderIDs = next
         saveCustomOrder()
     }
