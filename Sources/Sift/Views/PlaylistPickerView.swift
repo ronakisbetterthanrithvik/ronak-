@@ -27,6 +27,14 @@ struct PlaylistPickerView: View {
     /// `attemptReorderSwap`). The carousel has no other drag behavior -- paging is
     /// arrow-buttons-only (see `arrows`).
     @State private var reorderOffset: CGFloat = 0
+    /// How much of the current drag's raw translation has already been "spent" on a
+    /// swap -- `DragGesture`'s `value.translation` is always measured from wherever the
+    /// drag started, never resetting on its own, so `reorderOffset` has to be rederived
+    /// as `translation - consumedTranslation` on every change. Without that, the very
+    /// next pixel of movement after a swap would overwrite `reorderOffset` back to the
+    /// full un-adjusted translation, undoing the swap's own `-= gap` the instant the
+    /// cursor moved again -- which is why swapping past a neighbor never actually stuck.
+    @State private var consumedTranslation: CGFloat = 0
     /// Flips back and forth forever while rearranging to drive the jiggle -- combined
     /// with each tile's own offset parity (see `tile(for:offset:)`) so neighboring tiles
     /// rock in opposite directions instead of in lockstep.
@@ -172,6 +180,7 @@ struct PlaylistPickerView: View {
     /// to act on.
     private func beginRearranging(at index: Int) {
         guard !isRearranging else { return }
+        consumedTranslation = 0
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             selectedIndex = index
             isRearranging = true
@@ -212,11 +221,13 @@ struct PlaylistPickerView: View {
         while reorderOffset > gap / 2, selectedIndex + 1 < orderedPlaylists.count {
             swapOrder(selectedIndex, selectedIndex + 1)
             selectedIndex += 1
+            consumedTranslation += gap
             reorderOffset -= gap
         }
         while reorderOffset < -gap / 2, selectedIndex > 0 {
             swapOrder(selectedIndex, selectedIndex - 1)
             selectedIndex -= 1
+            consumedTranslation -= gap
             reorderOffset += gap
         }
     }
@@ -459,7 +470,13 @@ struct PlaylistPickerView: View {
                         beginRearranging(at: tappedIndex)
                     }
                     guard isSelected else { return }
-                    reorderOffset = value.translation.width
+                    // `value.translation` is always measured from where this drag
+                    // started, never resetting on its own -- subtracting
+                    // `consumedTranslation` (the part already "spent" on prior swaps
+                    // this same drag) is what keeps reorderOffset meaning "distance
+                    // since the last swap" instead of snapping back to the full
+                    // translation the instant the cursor moves again.
+                    reorderOffset = value.translation.width - consumedTranslation
                     attemptReorderSwap()
                 }
                 .onEnded { _ in
