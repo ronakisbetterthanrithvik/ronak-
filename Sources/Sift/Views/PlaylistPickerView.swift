@@ -18,8 +18,9 @@ struct PlaylistPickerView: View {
     @State private var customOrderIDs: [String] = []
     private let customOrderDefaultsKey = "sift.carouselOrder"
 
-    /// iOS-style "jiggle mode" -- long-press a tile to enter it, drag the centered tile
-    /// past a neighbor to swap places with it, tap anywhere to leave.
+    /// iOS-style "jiggle mode" -- dragging any tile enters it immediately, pushing that
+    /// tile past a neighbor swaps places with it, and the checkmark button (or tapping
+    /// anywhere) saves and leaves.
     @State private var isRearranging = false
     /// How far the centered tile has been dragged from rest while rearranging -- only the
     /// centered tile moves by this; its neighbors hold still until a swap happens (see
@@ -95,12 +96,14 @@ struct PlaylistPickerView: View {
                 } else {
                     Spacer()
                     carousel
-                    if !isRearranging {
+                    if isRearranging {
+                        doneRearrangingButton
+                    } else {
                         arrows
                     }
                     Spacer()
                     Text(isRearranging
-                        ? "Drag a tile to reorder -- tap anywhere to finish"
+                        ? "Drag a tile to reorder -- tap the checkmark to save"
                         : "Pick a playlist to open -- your Apple Music library, or one Sift created.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -417,26 +420,23 @@ struct PlaylistPickerView: View {
                 }
             }
         }
-        .onLongPressGesture(minimumDuration: 0.45) {
-            if let tappedIndex = orderedPlaylists.firstIndex(where: { $0.id == item.id }) {
-                beginRearranging(at: tappedIndex)
-            }
-        }
-        // `.simultaneousGesture`, not `.gesture` -- this view already has a tap and a
-        // long-press gesture of its own, and a plain `.gesture(DragGesture())` here would
-        // compete with those for the same touch instead of coexisting, likely why
-        // rearranging never actually triggered before. This runs alongside them; the
-        // guards below mean it only ever does anything once already rearranging, and
-        // only for the tile currently centered.
-        .simultaneousGesture(
-            DragGesture()
+        // A real drag, not a long-press -- `minimumDistance` is what lets this coexist
+        // with the plain `.onTapGesture` above (a click with no real movement resolves as
+        // the tap; only once the cursor actually moves does this take over), so starting
+        // to drag any tile enters rearrange mode immediately and starts moving it, rather
+        // than needing a held press first.
+        .gesture(
+            DragGesture(minimumDistance: 2)
                 .onChanged { value in
-                    guard isRearranging, isSelected else { return }
+                    if !isRearranging, let tappedIndex = orderedPlaylists.firstIndex(where: { $0.id == item.id }) {
+                        beginRearranging(at: tappedIndex)
+                    }
+                    guard isSelected else { return }
                     reorderOffset = value.translation.width
                     attemptReorderSwap()
                 }
                 .onEnded { _ in
-                    guard isRearranging, isSelected else { return }
+                    guard isSelected else { return }
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                         reorderOffset = 0
                     }
@@ -555,6 +555,23 @@ struct PlaylistPickerView: View {
                 selectedIndex = min(selectedIndex + 1, orderedPlaylists.count - 1)
             }
         }
+    }
+
+    /// Same visual style as `arrowButton` -- the explicit, visible way to confirm a
+    /// reorder and leave rearrange mode (tapping the carousel's background or a tile
+    /// still also exits, same as before; this just gives it a clear, discoverable button
+    /// too, shown in the arrows' place while rearranging).
+    private var doneRearrangingButton: some View {
+        Button {
+            endRearranging()
+        } label: {
+            Image(systemName: "checkmark")
+                .font(.system(size: 16, weight: .bold))
+                .frame(width: 52, height: 52)
+                .glassSurface(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
     }
 
     private func arrowButton(systemName: String, disabled: Bool, action: @escaping () -> Void) -> some View {
