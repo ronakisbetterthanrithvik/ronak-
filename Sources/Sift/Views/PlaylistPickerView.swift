@@ -239,6 +239,18 @@ struct PlaylistPickerView: View {
     /// chain through several swaps in one continuous gesture, the same way iOS lets you
     /// drag an icon straight across several others at once.
     private func attemptReorderSwap() {
+        // Belt-and-suspenders: `customOrderIDs` is supposed to already be synced to
+        // `playlists` by now (via onAppear/onChange), but that turned out not to be
+        // reliable in practice -- `syncCustomOrder` was never once observed to actually
+        // run a second time after its first empty-playlists skip, even once the real
+        // list had clearly loaded (the carousel was already showing real tiles via
+        // `orderedPlaylists`'s own fallback). Syncing again right here, immediately
+        // before the one thing that actually depends on `customOrderIDs` being correct,
+        // means a swap can't ever fail this way regardless of why that lifecycle timing
+        // didn't work out.
+        if customOrderIDs.count != playlists.count {
+            syncCustomOrder()
+        }
         let gap = xOffset(for: 1)
         guard gap > 0 else {
             print("Sift DEBUG: attemptReorderSwap — gap is \(gap), bailing")
