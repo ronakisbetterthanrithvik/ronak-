@@ -176,9 +176,6 @@ struct PlaylistPickerView: View {
             selectedIndex = index
             isRearranging = true
         }
-        withAnimation(.easeInOut(duration: 0.14).repeatForever(autoreverses: true)) {
-            jigglePhase.toggle()
-        }
     }
 
     private func endRearranging() {
@@ -186,8 +183,23 @@ struct PlaylistPickerView: View {
         withAnimation(.easeOut(duration: 0.2)) {
             isRearranging = false
             reorderOffset = 0
-            jigglePhase = false
         }
+    }
+
+    /// Drives the jiggle as an explicit loop instead of one long `repeatForever`
+    /// animation -- a single `repeatForever` transaction turned out not to survive the
+    /// separate `withAnimation` calls `swapOrder` fires on every reorder, which stopped
+    /// the shaking partway through. Each toggle here is its own short, independent
+    /// animation, so one swap's animation can never cancel it; the loop just keeps going,
+    /// checking `isRearranging` between steps, until the checkmark (or a tap) ends it.
+    private func runJiggleLoop() async {
+        while isRearranging, !Task.isCancelled {
+            withAnimation(.easeInOut(duration: 0.14)) {
+                jigglePhase.toggle()
+            }
+            try? await Task.sleep(nanoseconds: 140_000_000)
+        }
+        jigglePhase = false
     }
 
     /// Swaps the centered tile past a neighbor once it's been dragged more than half the
@@ -326,14 +338,25 @@ struct PlaylistPickerView: View {
 
     private var carousel: some View {
         ZStack {
-            ForEach(visibleIndices, id: \.self) { index in
-                tile(for: orderedPlaylists[index], offset: index - selectedIndex)
+            // Identified by the item's own stable id, not its array position -- with
+            // `id: \.self` on a raw index, swapping two items mid-drag (which changes
+            // *what's at* an index without changing the index itself) made SwiftUI treat
+            // the dragged tile as a brand new view the instant `selectedIndex` moved,
+            // tearing down its in-progress DragGesture recognizer mid-touch. Keying by
+            // the item's id means the same view (and its live gesture) follows that one
+            // playlist continuously through the whole drag, regardless of how its index
+            // shifts around it.
+            ForEach(visibleItems, id: \.id) { item in
+                if let index = orderedPlaylists.firstIndex(where: { $0.id == item.id }) {
+                    tile(for: item, offset: index - selectedIndex)
+                }
             }
         }
         .frame(height: 260)
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { endRearranging() }
+        .task(id: isRearranging) { await runJiggleLoop() }
     }
 
     private var visibleIndices: [Int] {
@@ -341,6 +364,10 @@ struct PlaylistPickerView: View {
             let index = selectedIndex + delta
             return orderedPlaylists.indices.contains(index) ? index : nil
         }
+    }
+
+    private var visibleItems: [PickablePlaylist] {
+        visibleIndices.map { orderedPlaylists[$0] }
     }
 
     /// A tile's width at a given distance from the selected (centered) one -- shared
