@@ -120,16 +120,12 @@ struct PlaylistPickerView: View {
             }
         }
         .onAppear {
-            print("Sift DEBUG: onAppear -- playlists.count=\(playlists.count) customOrderIDs.count(before)=\(customOrderIDs.count)")
             loadCustomOrder()
             syncCustomOrder()
-            print("Sift DEBUG: onAppear -- customOrderIDs.count(after)=\(customOrderIDs.count)")
         }
-        .onChange(of: playlists) { newValue in
-            print("Sift DEBUG: onChange(playlists) -- newValue.count=\(newValue.count) customOrderIDs.count(before)=\(customOrderIDs.count)")
+        .onChange(of: playlists) { _ in
             selectedIndex = 0
             syncCustomOrder()
-            print("Sift DEBUG: onChange(playlists) -- customOrderIDs.count(after)=\(customOrderIDs.count)")
         }
         .task(id: playlists.map(\.id)) { await prefetchAllCovers() }
         .sheet(isPresented: $showAIGenerator) {
@@ -173,21 +169,14 @@ struct PlaylistPickerView: View {
         // state here, not a real "no playlists" fact (that case is handled elsewhere in
         // `body`), and syncing against it would wipe any real saved order down to `[]`
         // and persist that wipe, permanently losing it.
-        guard !playlists.isEmpty else {
-            print("Sift DEBUG: syncCustomOrder -- playlists is empty, skipping")
-            return
-        }
+        guard !playlists.isEmpty else { return }
         let currentIDs = Set(playlists.map(\.id))
         var next = customOrderIDs.filter { currentIDs.contains($0) }
         let known = Set(next)
         for item in playlists where !known.contains(item.id) {
             next.append(item.id)
         }
-        guard next != customOrderIDs else {
-            print("Sift DEBUG: syncCustomOrder -- next == customOrderIDs (count=\(customOrderIDs.count)), no-op")
-            return
-        }
-        print("Sift DEBUG: syncCustomOrder -- updating customOrderIDs \(customOrderIDs.count) -> \(next.count)")
+        guard next != customOrderIDs else { return }
         customOrderIDs = next
         saveCustomOrder()
     }
@@ -202,7 +191,6 @@ struct PlaylistPickerView: View {
     /// drag did nothing at all, since this never got called for the new tile -- its own
     /// `isSelected` stayed false for the whole gesture, silently ignoring every update.
     private func beginRearranging(at index: Int) {
-        print("Sift DEBUG: beginRearranging at index \(index) (\(orderedPlaylists.indices.contains(index) ? orderedPlaylists[index].name : "?"))")
         consumedTranslation = 0
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             selectedIndex = index
@@ -252,19 +240,14 @@ struct PlaylistPickerView: View {
             syncCustomOrder()
         }
         let gap = xOffset(for: 1)
-        guard gap > 0 else {
-            print("Sift DEBUG: attemptReorderSwap — gap is \(gap), bailing")
-            return
-        }
+        guard gap > 0 else { return }
         while reorderOffset > gap / 2, selectedIndex + 1 < orderedPlaylists.count {
-            print("Sift DEBUG: swap right -- reorderOffset=\(reorderOffset) gap=\(gap) selectedIndex=\(selectedIndex)")
             swapOrder(selectedIndex, selectedIndex + 1)
             selectedIndex += 1
             consumedTranslation += gap
             reorderOffset -= gap
         }
         while reorderOffset < -gap / 2, selectedIndex > 0 {
-            print("Sift DEBUG: swap left -- reorderOffset=\(reorderOffset) gap=\(gap) selectedIndex=\(selectedIndex)")
             swapOrder(selectedIndex, selectedIndex - 1)
             selectedIndex -= 1
             consumedTranslation -= gap
@@ -273,11 +256,7 @@ struct PlaylistPickerView: View {
     }
 
     private func swapOrder(_ a: Int, _ b: Int) {
-        guard customOrderIDs.indices.contains(a), customOrderIDs.indices.contains(b) else {
-            print("Sift DEBUG: swapOrder — index out of bounds a=\(a) b=\(b) count=\(customOrderIDs.count)")
-            return
-        }
-        print("Sift DEBUG: swapOrder — swapping \(a) (\(customOrderIDs[a])) and \(b) (\(customOrderIDs[b]))")
+        guard customOrderIDs.indices.contains(a), customOrderIDs.indices.contains(b) else { return }
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             customOrderIDs.swapAt(a, b)
         }
@@ -510,7 +489,6 @@ struct PlaylistPickerView: View {
         .gesture(
             DragGesture(minimumDistance: 2)
                 .onChanged { value in
-                    print("Sift DEBUG: tile onChanged — item=\(item.name) isSelected=\(isSelected) isRearranging=\(isRearranging) translation=\(value.translation.width)")
                     // (Re)center on this tile whenever it isn't already the one being
                     // dragged -- either rearrange mode isn't active yet at all, or it is
                     // but a *different* tile is still centered (a fresh drag starting on
@@ -518,10 +496,7 @@ struct PlaylistPickerView: View {
                     if !isRearranging || !isSelected, let tappedIndex = orderedPlaylists.firstIndex(where: { $0.id == item.id }) {
                         beginRearranging(at: tappedIndex)
                     }
-                    guard isSelected else {
-                        print("Sift DEBUG: tile onChanged — item=\(item.name) is NOT selected, ignoring drag")
-                        return
-                    }
+                    guard isSelected else { return }
                     // `value.translation` is always measured from where this drag
                     // started, never resetting on its own -- subtracting
                     // `consumedTranslation` (the part already "spent" on prior swaps
@@ -532,7 +507,6 @@ struct PlaylistPickerView: View {
                     attemptReorderSwap()
                 }
                 .onEnded { _ in
-                    print("Sift DEBUG: tile onEnded — item=\(item.name) isSelected=\(isSelected)")
                     guard isSelected else { return }
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                         reorderOffset = 0
