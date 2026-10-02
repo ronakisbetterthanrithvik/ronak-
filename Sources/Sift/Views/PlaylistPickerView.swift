@@ -9,7 +9,6 @@ struct PlaylistPickerView: View {
     var onRetry: () -> Void
 
     @State private var selectedIndex = 0
-    @State private var dragTranslation: CGFloat = 0
 
     /// A manually-dragged display order, persisted across launches -- see
     /// `syncCustomOrder`/`orderedPlaylists`. This only ever changes how Sift *displays*
@@ -22,10 +21,10 @@ struct PlaylistPickerView: View {
     /// iOS-style "jiggle mode" -- long-press a tile to enter it, drag the centered tile
     /// past a neighbor to swap places with it, tap anywhere to leave.
     @State private var isRearranging = false
-    /// How far the centered tile has been dragged from rest while rearranging -- distinct
-    /// from `dragTranslation`, which instead pages between playlists outside rearrange
-    /// mode. Only the centered tile moves by this; its neighbors hold still until a swap
-    /// happens (see `attemptReorderSwap`).
+    /// How far the centered tile has been dragged from rest while rearranging -- only the
+    /// centered tile moves by this; its neighbors hold still until a swap happens (see
+    /// `attemptReorderSwap`). The carousel has no other drag behavior -- paging is
+    /// arrow-buttons-only (see `arrows`).
     @State private var reorderOffset: CGFloat = 0
     /// Flips back and forth forever while rearranging to drive the jiggle -- combined
     /// with each tile's own offset parity (see `tile(for:offset:)`) so neighboring tiles
@@ -331,7 +330,6 @@ struct PlaylistPickerView: View {
         .frame(height: 260)
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
-        .gesture(carouselDragGesture)
         .onTapGesture { endRearranging() }
     }
 
@@ -380,12 +378,12 @@ struct PlaylistPickerView: View {
         let distance = abs(offset)
         let size = tileSize(atDistance: distance)
         let dimOpacity = isSelected ? 1.0 : (distance == 1 ? 0.55 : 0.26)
-        // While rearranging, only the centered tile (the one being dragged) moves with
-        // the finger -- every neighbor holds its normal position until a swap actually
-        // happens, at which point it becomes the new centered tile and picks up this
-        // same offset itself. Outside rearrange mode this is the original paging drag,
-        // applied to every tile alike so the whole carousel visibly slides together.
-        let xPosition = xOffset(for: offset) + (isRearranging ? (isSelected ? reorderOffset : 0) : dragTranslation)
+        // Only the centered tile moves with the finger while rearranging -- every
+        // neighbor holds its normal position until a swap actually happens, at which
+        // point it becomes the new centered tile and picks up this same offset itself.
+        // The carousel otherwise never shifts on its own from a drag -- paging is
+        // arrow-buttons-only (see `arrows`).
+        let xPosition = xOffset(for: offset) + (isRearranging && isSelected ? reorderOffset : 0)
         // Alternates sign by offset parity so adjacent tiles rock opposite ways, like iOS
         // -- `jigglePhase` itself just flips back and forth forever to drive the timing.
         let jiggleAngle: Double = ((offset % 2 == 0) == jigglePhase) ? 1.6 : -1.6
@@ -424,35 +422,26 @@ struct PlaylistPickerView: View {
                 beginRearranging(at: tappedIndex)
             }
         }
-    }
-
-    private var carouselDragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                if isRearranging {
+        // `.simultaneousGesture`, not `.gesture` -- this view already has a tap and a
+        // long-press gesture of its own, and a plain `.gesture(DragGesture())` here would
+        // compete with those for the same touch instead of coexisting, likely why
+        // rearranging never actually triggered before. This runs alongside them; the
+        // guards below mean it only ever does anything once already rearranging, and
+        // only for the tile currently centered.
+        .simultaneousGesture(
+            DragGesture()
+                .onChanged { value in
+                    guard isRearranging, isSelected else { return }
                     reorderOffset = value.translation.width
                     attemptReorderSwap()
-                } else {
-                    dragTranslation = value.translation.width
                 }
-            }
-            .onEnded { value in
-                if isRearranging {
+                .onEnded { _ in
+                    guard isRearranging, isSelected else { return }
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                         reorderOffset = 0
                     }
-                    return
                 }
-                let threshold: CGFloat = 60
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    if value.translation.width < -threshold {
-                        selectedIndex = min(selectedIndex + 1, orderedPlaylists.count - 1)
-                    } else if value.translation.width > threshold {
-                        selectedIndex = max(selectedIndex - 1, 0)
-                    }
-                    dragTranslation = 0
-                }
-            }
+        )
     }
 
     @ViewBuilder
