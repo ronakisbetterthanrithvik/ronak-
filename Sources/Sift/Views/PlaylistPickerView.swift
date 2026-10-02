@@ -178,8 +178,13 @@ struct PlaylistPickerView: View {
     /// Enters jiggle mode on the tile at `index`, centering it first so the drag gesture
     /// (which only ever moves the centered tile -- see `tile(for:offset:)`) has something
     /// to act on.
+    /// Centers `index` and (re)starts a drag on it -- called whenever a tile that isn't
+    /// already the centered one starts being dragged, whether or not rearrange mode was
+    /// already active. No longer guarded on `!isRearranging`: that guard meant starting a
+    /// fresh drag on a *different* tile while one was already centered from an earlier
+    /// drag did nothing at all, since this never got called for the new tile -- its own
+    /// `isSelected` stayed false for the whole gesture, silently ignoring every update.
     private func beginRearranging(at index: Int) {
-        guard !isRearranging else { return }
         print("Sift DEBUG: beginRearranging at index \(index) (\(orderedPlaylists.indices.contains(index) ? orderedPlaylists[index].name : "?"))")
         consumedTranslation = 0
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -477,7 +482,11 @@ struct PlaylistPickerView: View {
             DragGesture(minimumDistance: 2)
                 .onChanged { value in
                     print("Sift DEBUG: tile onChanged — item=\(item.name) isSelected=\(isSelected) isRearranging=\(isRearranging) translation=\(value.translation.width)")
-                    if !isRearranging, let tappedIndex = orderedPlaylists.firstIndex(where: { $0.id == item.id }) {
+                    // (Re)center on this tile whenever it isn't already the one being
+                    // dragged -- either rearrange mode isn't active yet at all, or it is
+                    // but a *different* tile is still centered (a fresh drag starting on
+                    // a tile other than the one last dragged).
+                    if !isRearranging || !isSelected, let tappedIndex = orderedPlaylists.firstIndex(where: { $0.id == item.id }) {
                         beginRearranging(at: tappedIndex)
                     }
                     guard isSelected else {
