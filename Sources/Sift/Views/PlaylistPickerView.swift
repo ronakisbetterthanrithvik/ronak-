@@ -125,7 +125,13 @@ struct PlaylistPickerView: View {
     /// playlist's songs elsewhere -- a duplicate id here would otherwise crash outright.
     private var orderedPlaylists: [PickablePlaylist] {
         let byID = Dictionary(playlists.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return customOrderIDs.compactMap { byID[$0] }
+        let ordered = customOrderIDs.compactMap { byID[$0] }
+        // customOrderIDs is only meaningful once it's been synced against the current
+        // playlists (see syncCustomOrder) -- if it hasn't caught up yet for any reason
+        // (a transient empty `playlists` mid-reload, a timing race), falling back to
+        // `playlists` itself means the carousel always shows every real playlist, just
+        // not necessarily in the saved order, rather than going blank.
+        return ordered.count == playlists.count ? ordered : playlists
     }
 
     private func loadCustomOrder() {
@@ -143,6 +149,11 @@ struct PlaylistPickerView: View {
     /// exists (a deleted playlist), and appends anything new (a playlist just created, or
     /// the very first time this ever runs) in its original relative order at the end.
     private func syncCustomOrder() {
+        // Never sync against an empty `playlists` -- that's always a transient loading
+        // state here, not a real "no playlists" fact (that case is handled elsewhere in
+        // `body`), and syncing against it would wipe any real saved order down to `[]`
+        // and persist that wipe, permanently losing it.
+        guard !playlists.isEmpty else { return }
         let currentIDs = Set(playlists.map(\.id))
         var next = customOrderIDs.filter { currentIDs.contains($0) }
         let known = Set(next)
