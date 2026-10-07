@@ -52,9 +52,46 @@ enum CatalogPlaylistGeneratorService {
         {"name": "Short Playlist Name", "songs": [{"title": "Song Title", "artist": "Artist Name"}, ...]}
         """
 
+        return try await requestAndResolve(systemPrompt: systemPrompt, userMessage: request)
+    }
+
+    /// Applies a follow-up free-text change ("add more Travis Scott," "swap out the
+    /// slow songs") to a playlist this service already built, rather than starting over.
+    /// Claude is handed the *current* song list as context so it knows what's already
+    /// there, but still can't browse the catalog itself -- same suggest-then-verify
+    /// pipeline as `generate`, just given one playlist's worth of existing context first.
+    static func refine(currentName: String, currentSongs: [SiftSong], editRequest: String) async throws -> CatalogPlaylistGeneratorResult {
+        let songList = currentSongs.map { "\($0.displayTitle) — \($0.displayArtist)" }.joined(separator: "\n")
+        let systemPrompt = """
+        You build and edit playlists inside Sift, a macOS Apple Music companion app. You \
+        already built a playlist for this person from an earlier request, and they now \
+        want a change made to it. You are still NOT given an existing list of songs to \
+        choose replacements from -- suggest real, specific songs from your own knowledge, \
+        same as building a playlist from scratch.
+
+        The playlist is currently called "\(currentName)" and has these songs (title — \
+        artist), one per line:
+        \(songList)
+
+        Apply the person's requested change below to this playlist, then respond with \
+        the FULL updated song list, not just what changed -- keep every song the request \
+        doesn't call for changing, drop whichever songs it asks to remove, and add \
+        whichever songs it asks to add, real and specific (a real title and the real \
+        artist who recorded it -- never a made-up or paraphrased title). Keep the same \
+        playlist name unless the request implies a new one fits better.
+
+        Respond with ONLY a single JSON object and nothing else -- no prose, no markdown \
+        fences -- in exactly this shape:
+        {"name": "Short Playlist Name", "songs": [{"title": "Song Title", "artist": "Artist Name"}, ...]}
+        """
+
+        return try await requestAndResolve(systemPrompt: systemPrompt, userMessage: editRequest)
+    }
+
+    private static func requestAndResolve(systemPrompt: String, userMessage: String) async throws -> CatalogPlaylistGeneratorResult {
         let text: String
         do {
-            text = try await ClaudeProxyClient.sendMessage(system: systemPrompt, userMessage: request)
+            text = try await ClaudeProxyClient.sendMessage(system: systemPrompt, userMessage: userMessage)
         } catch let error as ClaudeProxyError {
             throw CatalogPlaylistGeneratorError.proxy(error)
         }

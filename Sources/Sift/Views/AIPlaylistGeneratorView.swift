@@ -16,6 +16,11 @@ struct AIPlaylistGeneratorView: View {
     @State private var resolvedSongs: [SiftSong] = []
     @State private var currentCreation: ProposedPlaylist?
 
+    @State private var isEditingPlaylist = false
+    @State private var editRequestText = ""
+    @State private var isApplyingEdit = false
+    @State private var editError: String?
+
     var body: some View {
         ZStack {
             Theme.background
@@ -45,6 +50,9 @@ struct AIPlaylistGeneratorView: View {
                 },
                 onSkip: { currentCreation = nil }
             )
+        }
+        .sheet(isPresented: $isEditingPlaylist) {
+            editPromptSheet
         }
     }
 
@@ -181,11 +189,25 @@ struct AIPlaylistGeneratorView: View {
 
             Divider().overlay(Color.white.opacity(0.08))
 
-            HStack {
+            HStack(spacing: 10) {
                 Button("Start Over") {
                     proposal = nil
                     resolvedSongs = []
                     requestText = ""
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(Color.white.opacity(0.08)))
+                .foregroundStyle(.white)
+
+                Button {
+                    editRequestText = ""
+                    editError = nil
+                    isEditingPlaylist = true
+                } label: {
+                    Label("Edit Playlist", systemImage: "pencil")
+                        .font(.system(size: 13, weight: .medium))
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 18)
@@ -249,5 +271,107 @@ struct AIPlaylistGeneratorView: View {
         current.duration = remaining.reduce(0) { $0 + $1.duration }
         current.previewTracks = Array(remaining.prefix(3).map(\.title))
         proposal = current
+    }
+
+    // MARK: - Edit step
+
+    /// A follow-up free-text request applied to the *current* result instead of starting
+    /// over -- "add more Travis Scott," "swap out the slow songs for upbeat ones." See
+    /// `CatalogPlaylistGeneratorService.refine`.
+    private var editPromptSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Edit Playlist").font(.title3.bold())
+                Spacer()
+                Button { isEditingPlaylist = false } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .padding(8)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("Describe the change -- add more songs from an artist, swap out a mood, remove something that doesn't fit. The rest of the playlist stays as is.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $editRequestText)
+                    .font(.callout)
+                    .scrollContentBackground(.hidden)
+                    .frame(height: 100)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 12)
+
+                if editRequestText.isEmpty {
+                    Text("e.g. \"Add more Travis Scott songs\"")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 13)
+                        .padding(.vertical, 16)
+                        .allowsHitTesting(false)
+                }
+            }
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.white.opacity(0.1), lineWidth: 1))
+
+            if let editError {
+                Text(editError)
+                    .font(.caption)
+                    .foregroundStyle(Theme.accentSecondary)
+            }
+
+            Spacer()
+
+            HStack {
+                Spacer()
+                Button {
+                    applyEdit()
+                } label: {
+                    HStack(spacing: 6) {
+                        if isApplyingEdit {
+                            ProgressView().controlSize(.small).tint(.white)
+                        }
+                        Text(isApplyingEdit ? "Updating…" : "Apply Edit")
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Theme.accentGradient))
+                    .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .disabled(isApplyingEdit || editRequestText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 440, height: 360)
+        .background(Theme.background)
+        .preferredColorScheme(.dark)
+    }
+
+    private func applyEdit() {
+        let trimmed = editRequestText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let current = proposal else { return }
+        isApplyingEdit = true
+        editError = nil
+        Task {
+            do {
+                let result = try await CatalogPlaylistGeneratorService.refine(
+                    currentName: current.name,
+                    currentSongs: resolvedSongs,
+                    editRequest: trimmed
+                )
+                resolvedSongs = result.songs
+                proposal = AutoSortEngine.vibeProposal(name: result.name, songs: result.songs)
+                isEditingPlaylist = false
+                editRequestText = ""
+            } catch {
+                editError = error.localizedDescription
+            }
+            isApplyingEdit = false
+        }
     }
 }
