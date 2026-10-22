@@ -47,6 +47,7 @@ enum SmartControlEngine {
             guard scoreA != scoreB else { return false }
             return dialFavorsMostPlayed ? scoreA > scoreB : scoreA < scoreB
         }
+        print("Sift DEBUG: orderedQueue — first 3 of \(ordered.count): \(ordered.prefix(3).map { "\($0.title) score=\(familiarityScore($0))" })")
         return ordered
     }
 

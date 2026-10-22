@@ -244,10 +244,14 @@ final class PlaybackService: ObservableObject {
         // seemingly), silently undoing that assignment. Setting it after the queue (and
         // again after play() actually starts) makes sure `.off` is the last word, closest
         // to when playback begins, instead of something that can get overwritten first.
+        print("Sift DEBUG: start(with:) — first 3 of \(playable.count): \(playable.prefix(3).map(\.title))")
         player.queue = ApplicationMusicPlayer.Queue(for: musicKitSongs)
+        print("Sift DEBUG: start(with:) — shuffleMode after queue assign: \(player.state.shuffleMode)")
         player.state.shuffleMode = .off
         try await player.play()
+        print("Sift DEBUG: start(with:) — shuffleMode after play(): \(player.state.shuffleMode)")
         player.state.shuffleMode = .off
+        print("Sift DEBUG: start(with:) — queue.currentEntry title right after play(): \(String(describing: player.queue.currentEntry?.title))")
         isPlaying = true
         queuedSongs = playable
         playedHistory = []
