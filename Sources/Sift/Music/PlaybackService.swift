@@ -55,6 +55,14 @@ final class PlaybackService: ObservableObject {
     /// directly (via a `TimelineView`) instead of Sift maintaining its own timer.
     var currentPlaybackTime: TimeInterval { player.playbackTime }
 
+    /// Jumps playback directly to `time` -- `ApplicationMusicPlayer.playbackTime` is a
+    /// real get/set property, not read-only, so assigning to it is MusicKit's own way of
+    /// seeking. Used by the now-playing bar's draggable progress line to let someone
+    /// tap or drag to a different point in the song instead of only scrubbing by ear.
+    func seek(to time: TimeInterval) {
+        player.playbackTime = time
+    }
+
     func playInOrder(_ songs: [SiftSong]) async throws {
         try await start(with: songs)
     }

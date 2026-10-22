@@ -646,7 +646,8 @@ struct PlaylistDetailView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
-            .background(Capsule().fill(Color.black.opacity(0.92)))
+            .background(Capsule().fill(Color.black))
+            .glassEdge(Capsule(), lineWidth: 1.25, baseOpacity: 0.4)
             .padding(.bottom, 16)
         }
     }
@@ -654,18 +655,44 @@ struct PlaylistDetailView: View {
     /// Polls `playback.currentPlaybackTime` on a half-second tick -- MusicKit doesn't
     /// publish elapsed time as a Combine value, so this is the simplest way to keep the
     /// line moving without Sift maintaining its own timer/state for it.
+    ///
+    /// The bar itself is a fixed width rather than letting `GeometryReader` expand to
+    /// fill all available space (its default behavior) -- that unconstrained expansion
+    /// was what made the whole pill stretch out far wider than its actual content.
+    /// Dragging (or just clicking) anywhere along it seeks -- `DragGesture(minimumDistance: 0)`
+    /// fires on a plain click too, not just a real drag, so both gestures land on the
+    /// same spot you touched.
     private func playbackProgressLine(for song: SiftSong) -> some View {
-        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.15))
-                    Capsule()
-                        .fill(Color.white.opacity(0.85))
-                        .frame(width: geo.size.width * progressFraction(for: song))
+        HStack(spacing: 8) {
+            TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.15))
+                        Capsule()
+                            .fill(Color.white.opacity(0.85))
+                            .frame(width: geo.size.width * progressFraction(for: song))
+                    }
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                seek(to: value.location.x, barWidth: geo.size.width, duration: song.duration)
+                            }
+                    )
                 }
             }
+            .frame(width: 160, height: 3)
+
+            Text(song.duration.asClockString)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
         }
-        .frame(height: 3)
+    }
+
+    private func seek(to x: CGFloat, barWidth: CGFloat, duration: TimeInterval) {
+        guard barWidth > 0, duration > 0 else { return }
+        let fraction = min(max(x / barWidth, 0), 1)
+        playback.seek(to: fraction * duration)
     }
 
     private func progressFraction(for song: SiftSong) -> Double {
