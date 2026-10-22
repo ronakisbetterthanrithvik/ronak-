@@ -587,63 +587,62 @@ struct PlaylistDetailView: View {
     @ViewBuilder
     private var nowPlayingBar: some View {
         if let song = nowPlayingSong {
-            VStack(spacing: 6) {
-                HStack(spacing: 20) {
-                    HStack(spacing: 18) {
-                        Button { Task { await shuffleTapped() } } label: {
-                            Image(systemName: "shuffle")
-                        }
-                        Button { Task { await playback.skipToPrevious() } } label: {
-                            Image(systemName: "backward.fill")
-                        }
-                        Button {
-                            if playback.isPlaying {
-                                playback.pause()
-                            } else {
-                                Task { try? await playback.resume() }
-                            }
-                        } label: {
-                            Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 15, weight: .bold))
-                        }
-                        Button { Task { await playback.skipToNext() } } label: {
-                            Image(systemName: "forward.fill")
-                        }
+            HStack(spacing: 20) {
+                HStack(spacing: 18) {
+                    Button { Task { await shuffleTapped() } } label: {
+                        Image(systemName: "shuffle")
                     }
-                    .font(.system(size: 13, weight: .semibold))
-
-                    Button { showQueue = true } label: {
-                        HStack(spacing: 10) {
-                            rowArtwork(for: song, size: 32)
-                                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(song.displayTitle)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .lineLimit(1)
-                                Text(song.displayArtist)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            if playback.isPlaying {
-                                EqualizerBars(isPlaying: true)
-                            }
-                        }
-                        .contentShape(Rectangle())
+                    Button { Task { await playback.skipToPrevious() } } label: {
+                        Image(systemName: "backward.fill")
                     }
-
-                    Button { showQueue = true } label: {
-                        Image(systemName: "list.bullet")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                    Button {
+                        if playback.isPlaying {
+                            playback.pause()
+                        } else {
+                            Task { try? await playback.resume() }
+                        }
+                    } label: {
+                        Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 15, weight: .bold))
+                    }
+                    Button { Task { await playback.skipToNext() } } label: {
+                        Image(systemName: "forward.fill")
                     }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.white)
+                .font(.system(size: 13, weight: .semibold))
 
+                Button { showQueue = true } label: {
+                    HStack(spacing: 10) {
+                        rowArtwork(for: song, size: 32)
+                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(song.displayTitle)
+                                .font(.system(size: 13, weight: .semibold))
+                                .lineLimit(1)
+                            Text(song.displayArtist)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        if playback.isPlaying {
+                            EqualizerBars(isPlaying: true)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+
+                Button { showQueue = true } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                // On the same row as the controls rather than its own line below --
+                // keeps the whole pill compact top-to-bottom instead of stacking two rows.
                 playbackProgressLine(for: song)
-                    .padding(.horizontal, 4)
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
             .background(Capsule().fill(Color.black))

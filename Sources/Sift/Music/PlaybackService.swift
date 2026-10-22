@@ -236,11 +236,18 @@ final class PlaybackService: ObservableObject {
         // means `SmartControlEngine`'s own shuffled order. MusicKit's native shuffle mode
         // (if left on from a prior session) re-shuffles on top of whatever queue you give
         // it while keeping the first entry anchored as the "starting" track, which is
-        // exactly "always starts on the same song, only what's after it is shuffled" --
-        // turning it off here makes sure our own ordering is what actually plays.
-        player.state.shuffleMode = .off
+        // exactly "always starts on the same song, only what's after it is shuffled."
+        //
+        // Setting `shuffleMode` *before* assigning a new `queue` turned out not to be
+        // enough -- assigning a fresh queue appears to reset the player's shuffle state
+        // back to whatever it was before (the system's own persisted preference,
+        // seemingly), silently undoing that assignment. Setting it after the queue (and
+        // again after play() actually starts) makes sure `.off` is the last word, closest
+        // to when playback begins, instead of something that can get overwritten first.
         player.queue = ApplicationMusicPlayer.Queue(for: musicKitSongs)
+        player.state.shuffleMode = .off
         try await player.play()
+        player.state.shuffleMode = .off
         isPlaying = true
         queuedSongs = playable
         playedHistory = []
