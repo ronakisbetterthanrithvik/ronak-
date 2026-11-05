@@ -495,12 +495,18 @@ struct PlaylistDetailView: View {
             .buttonStyle(.plain)
 
             Button { Task { await shuffleTapped() } } label: {
-                Label("Shuffle", systemImage: "shuffle")
-                    .font(.system(size: 14, weight: .semibold))
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 11)
-                    .glassSurface(Capsule())
-                    .foregroundStyle(.white)
+                Label {
+                    Text("Shuffle")
+                } icon: {
+                    Theme.appIcon
+                        .resizable()
+                        .frame(width: 15, height: 15)
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 11)
+                .glassSurface(Capsule())
+                .foregroundStyle(.white)
             }
             .buttonStyle(.plain)
 
@@ -590,7 +596,9 @@ struct PlaylistDetailView: View {
             HStack(spacing: 20) {
                 HStack(spacing: 18) {
                     Button { Task { await shuffleTapped() } } label: {
-                        Image(systemName: "shuffle")
+                        Theme.appIcon
+                            .resizable()
+                            .frame(width: 14, height: 14)
                     }
                     Button { Task { await playback.skipToPrevious() } } label: {
                         Image(systemName: "backward.fill")
