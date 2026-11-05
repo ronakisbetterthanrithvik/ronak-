@@ -500,7 +500,7 @@ struct PlaylistDetailView: View {
                 } icon: {
                     Theme.appIcon
                         .resizable()
-                        .frame(width: 15, height: 15)
+                        .frame(width: 19, height: 19)
                 }
                 .font(.system(size: 14, weight: .semibold))
                 .padding(.horizontal, 20)
@@ -598,7 +598,7 @@ struct PlaylistDetailView: View {
                     Button { Task { await shuffleTapped() } } label: {
                         Theme.appIcon
                             .resizable()
-                            .frame(width: 14, height: 14)
+                            .frame(width: 18, height: 18)
                     }
                     Button { Task { await playback.skipToPrevious() } } label: {
                         Image(systemName: "backward.fill")
