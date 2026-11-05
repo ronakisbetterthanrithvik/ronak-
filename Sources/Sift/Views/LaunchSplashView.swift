@@ -29,7 +29,6 @@ struct LaunchSplashView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 96, height: 96)
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .shadow(color: Theme.accentPrimary.opacity(0.5), radius: 24, y: 8)
                     .scaleEffect(iconScale)
                     .opacity(iconOpacity)
