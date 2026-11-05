@@ -364,7 +364,7 @@ struct PlaylistPickerView: View {
             Theme.appIcon
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 56, height: 56)
+                .frame(width: 72, height: 72)
         }
         .padding(.top, 28)
         .padding(.horizontal, 32)
