@@ -246,21 +246,25 @@ struct PlaylistPickerView: View {
         // screen position and has to stay a pure mirror of the cursor. Only
         // `consumedTranslation` (the swap bookkeeping) moves.
         while reorderOffset - consumedTranslation > gap / 2, selectedIndex + 1 < orderedPlaylists.count {
-            swapOrder(selectedIndex, selectedIndex + 1)
-            selectedIndex += 1
+            swapOrder(selectedIndex, selectedIndex + 1, newSelectedIndex: selectedIndex + 1)
             consumedTranslation += gap
         }
         while reorderOffset - consumedTranslation < -gap / 2, selectedIndex > 0 {
-            swapOrder(selectedIndex, selectedIndex - 1)
-            selectedIndex -= 1
+            swapOrder(selectedIndex, selectedIndex - 1, newSelectedIndex: selectedIndex - 1)
             consumedTranslation -= gap
         }
     }
 
-    private func swapOrder(_ a: Int, _ b: Int) {
+    /// Swaps two entries *and* moves `selectedIndex` to follow, in the same animation
+    /// transaction -- every visible tile's position depends on both the array order and
+    /// `selectedIndex` together, so animating only one of them (the array swap used to be
+    /// the only part wrapped here, with `selectedIndex` changing separately, unanimated,
+    /// right after) made neighboring tiles partly glide and partly snap on every swap.
+    private func swapOrder(_ a: Int, _ b: Int, newSelectedIndex: Int) {
         guard customOrderIDs.indices.contains(a), customOrderIDs.indices.contains(b) else { return }
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             customOrderIDs.swapAt(a, b)
+            selectedIndex = newSelectedIndex
         }
         saveCustomOrder()
     }
