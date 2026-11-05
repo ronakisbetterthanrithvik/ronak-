@@ -397,6 +397,18 @@ struct PlaylistPickerView: View {
         .contentShape(Rectangle())
         .onTapGesture { endRearranging() }
         .task(id: isRearranging) { await runJiggleLoop() }
+        // Lets a two-finger trackpad swipe page the carousel the same way the arrow
+        // buttons do -- placed as an overlay (not a sibling) so AppKit always offers it
+        // scroll-wheel events first, but its own `hitTest` override passes anything that
+        // isn't a scroll (a tap, the reorder drag) straight through to the tiles
+        // underneath. Ignored while rearranging so it can't fight the drag-to-reorder
+        // gesture.
+        .overlay(
+            TrackpadSwipeCatcher(
+                onSwipeForward: { pageCarousel(by: 1) },
+                onSwipeBackward: { pageCarousel(by: -1) }
+            )
+        )
     }
 
     private var visibleIndices: [Int] {
@@ -625,11 +637,24 @@ struct PlaylistPickerView: View {
     private var arrows: some View {
         HStack(spacing: 28) {
             arrowButton(systemName: "chevron.left", disabled: selectedIndex == 0) {
-                selectedIndex = max(selectedIndex - 1, 0)
+                pageCarousel(by: -1)
             }
             arrowButton(systemName: "chevron.right", disabled: selectedIndex >= orderedPlaylists.count - 1) {
-                selectedIndex = min(selectedIndex + 1, orderedPlaylists.count - 1)
+                pageCarousel(by: 1)
             }
+        }
+    }
+
+    /// Moves the carousel one tile forward/backward, the same step the arrow buttons take
+    /// -- shared with `TrackpadSwipeCatcher`'s swipe callbacks so a trackpad swipe pages
+    /// identically to clicking an arrow. Ignored while rearranging so a stray trackpad
+    /// swipe can't fight the drag-to-reorder gesture.
+    private func pageCarousel(by step: Int) {
+        guard !isRearranging else { return }
+        let next = selectedIndex + step
+        guard orderedPlaylists.indices.contains(next) else { return }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            selectedIndex = next
         }
     }
 
