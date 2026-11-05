@@ -623,6 +623,10 @@ struct PlaylistDetailView: View {
                     HStack(spacing: 10) {
                         rowArtwork(for: song, size: 32)
                             .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        // A fixed width (with truncation) instead of hugging the title's
+                        // actual length -- otherwise the whole pill resized on every song
+                        // change, shifting every button's position and making it
+                        // impossible to rapid-click "next" without re-aiming the cursor.
                         VStack(alignment: .leading, spacing: 1) {
                             Text(song.displayTitle)
                                 .font(.system(size: 13, weight: .semibold))
@@ -632,9 +636,11 @@ struct PlaylistDetailView: View {
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
-                        if playback.isPlaying {
-                            EqualizerBars(isPlaying: true)
-                        }
+                        .frame(width: 150, alignment: .leading)
+                        // Always present (not conditionally inserted) so pausing/resuming
+                        // doesn't change the row's width either -- just hidden via opacity.
+                        EqualizerBars(isPlaying: playback.isPlaying)
+                            .opacity(playback.isPlaying ? 1 : 0)
                     }
                     .contentShape(Rectangle())
                 }
@@ -693,6 +699,7 @@ struct PlaylistDetailView: View {
             Text(song.duration.asClockString)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
+                .frame(width: 32, alignment: .trailing)
         }
     }
 

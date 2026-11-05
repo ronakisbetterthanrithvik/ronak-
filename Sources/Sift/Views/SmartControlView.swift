@@ -92,16 +92,22 @@ struct SmartControlView: View {
     }
 
     private var smartShuffleToggleSection: some View {
-        Toggle(isOn: $draft.isSmartShuffleEnabled) {
+        // Built as a plain HStack instead of Toggle(isOn:label:) -- that version aligns
+        // the switch to the label's first line by default, not centered against the
+        // full two-line label, which is what made it look off-center against the text.
+        HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Smart Shuffle").font(.headline)
                 Text("Off: Shuffle is a plain random shuffle -- no listening-history bias at all.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Spacer()
+            Toggle("", isOn: $draft.isSmartShuffleEnabled)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(Theme.accentPrimary)
         }
-        .toggleStyle(.switch)
-        .tint(Theme.accentPrimary)
     }
 
     private var familiaritySection: some View {
