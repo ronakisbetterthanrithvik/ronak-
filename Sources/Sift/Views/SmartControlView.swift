@@ -41,8 +41,13 @@ struct SmartControlView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 28) {
+                        smartShuffleToggleSection
                         familiaritySection
+                            .opacity(draft.isSmartShuffleEnabled ? 1 : 0.4)
+                            .disabled(!draft.isSmartShuffleEnabled)
                         signalsSection
+                            .opacity(draft.isSmartShuffleEnabled ? 1 : 0.4)
+                            .disabled(!draft.isSmartShuffleEnabled)
                         genresSection
                         artistsSection
                     }
@@ -84,6 +89,19 @@ struct SmartControlView: View {
             .buttonStyle(.plain)
         }
         .padding(20)
+    }
+
+    private var smartShuffleToggleSection: some View {
+        Toggle(isOn: $draft.isSmartShuffleEnabled) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Smart Shuffle").font(.headline)
+                Text("Off: Shuffle is a plain random shuffle -- no listening-history bias at all.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .toggleStyle(.switch)
+        .tint(Theme.accentPrimary)
     }
 
     private var familiaritySection: some View {

@@ -18,6 +18,10 @@ enum SmartControlEngine {
 
         guard !eligible.isEmpty else { return songs.shuffled() }
 
+        // Genre/artist filtering still applies either way -- this only skips the
+        // listening-history-weighted ordering itself, for a plain random shuffle instead.
+        guard settings.isSmartShuffleEnabled else { return eligible.shuffled() }
+
         let skipWeight = multiplier(for: "Skips in Shuffle", in: settings)
         let recentWeight = multiplier(for: "Recently Played", in: settings)
         let repeatWeight = multiplier(for: "On Repeat", in: settings)
@@ -25,29 +29,38 @@ enum SmartControlEngine {
         let history = ListeningHistoryStore.shared
         let dialFavorsMostPlayed = settings.familiarity >= 0.5
 
-        func familiarityScore(_ song: SiftSong) -> Double {
+        // Split into two pieces instead of one combined score -- `preference` legitimately
+        // flips meaning with the dial (more plays should sort first when favoring
+        // most-played, last when favoring deep cuts), but `skipPenalty` must not: a
+        // heavily-skipped song should always rank later, never earlier, regardless of
+        // which way the dial points. Folding both into one score and reversing the whole
+        // thing for "favor deep cuts" used to flip the skip penalty's sign along with it,
+        // so a song skipped a lot got read as an overlooked deep cut and sorted first --
+        // the opposite of "Skips in Shuffle: songs you skip drop lower in the queue."
+        func rankValue(_ song: SiftSong) -> Double {
             let entry = history.entry(for: song.libraryID)
             let daysSinceLastPlay = entry.lastPlayedAt.map { Date().timeIntervalSince($0) / 86_400 } ?? 90
 
-            var score = 0.0
-            score += Double(entry.plays) * 3.0
-            score += (entry.totalSecondsListened / 60) * minutesWeight * 0.2
-            score -= min(daysSinceLastPlay, 90) * recentWeight * 0.3
-            score += Double(entry.repeatsInSession) * repeatWeight * 2.0
-            score -= Double(entry.skips) * skipWeight * 4.0
-            return score
+            var preference = 0.0
+            preference += Double(entry.plays) * 3.0
+            preference += (entry.totalSecondsListened / 60) * minutesWeight * 0.2
+            preference -= min(daysSinceLastPlay, 90) * recentWeight * 0.3
+            preference += Double(entry.repeatsInSession) * repeatWeight * 2.0
+
+            let skipPenalty = Double(entry.skips) * skipWeight * 4.0
+            let flippedPreference = dialFavorsMostPlayed ? -preference : preference
+            return flippedPreference + skipPenalty
         }
 
         // Shuffle first so brand-new songs (identical, all-zero history) don't sort
         // into the same order every time — only songs with real signal separate out.
         var ordered = eligible.shuffled()
         ordered.sort { a, b in
-            let scoreA = familiarityScore(a)
-            let scoreB = familiarityScore(b)
-            guard scoreA != scoreB else { return false }
-            return dialFavorsMostPlayed ? scoreA > scoreB : scoreA < scoreB
+            let rankA = rankValue(a)
+            let rankB = rankValue(b)
+            guard rankA != rankB else { return false }
+            return rankA < rankB
         }
-        print("Sift DEBUG: orderedQueue — first 3 of \(ordered.count): \(ordered.prefix(3).map { "\($0.title) score=\(familiarityScore($0))" })")
         return ordered
     }
 

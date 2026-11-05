@@ -136,6 +136,9 @@ struct SmartControlSettings {
     var signals: [SignalControl]
     var selectedGenres: Set<String>
     var selectedArtists: Set<String>
+    /// Off switches `SmartControlEngine`'s weighted ordering entirely -- Shuffle just
+    /// does a plain random shuffle instead, no listening-history bias at all.
+    var isSmartShuffleEnabled = true
 
     static func `default`(for playlist: SiftPlaylist) -> SmartControlSettings {
         SmartControlSettings(
